@@ -1,4 +1,39 @@
 -------------------------------------------------------------------
+Fri Jan 22 12:40:07 UTC 2021 - Andre Meyering <info@andremeyering.de>
+
+- Update MediaElch to v2.8.6 
+
+-------------------------------------------------------------------
+Sat Jan  9 10:43:21 UTC 2021 - Andre Meyering <info@andremeyering.de>
+
+- Fix compiler error on openSUSE Leap 15.1 
+
+-------------------------------------------------------------------
+Sat Jan  9 10:07:06 UTC 2021 - Andre Meyering <info@andremeyering.de>
+
+- Update MediaElch to v2.8.4 
+
+-------------------------------------------------------------------
+Sun Dec 20 12:22:15 UTC 2020 - Andre Meyering <info@andremeyering.de>
+
+- Use GCC-7 again instead of GCC-8
+
+-------------------------------------------------------------------
+Sun Dec 20 12:03:09 UTC 2020 - Andre Meyering <info@andremeyering.de>
+
+- Update MediaElch to v2.8.2 
+
+-------------------------------------------------------------------
+Tue Dec 15 07:59:23 UTC 2020 - Andre Meyering <info@andremeyering.de>
+
+- Fix spec file for MediaElch v2.8.0
+
+-------------------------------------------------------------------
+Sun Dec 13 16:40:18 UTC 2020 - Andre Meyering <info@andremeyering.de>
+
+- Updated MediaElch to v2.8.0 
+
+-------------------------------------------------------------------
 Sat Apr 18 13:49:02 UTC 2020 - info@andremeyering.de
 
 - Updated MediaElch to v2.6.6 

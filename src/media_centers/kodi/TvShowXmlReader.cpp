@@ -47,6 +47,8 @@ void TvShowXmlReader::parseNfoDom(QDomDocument domDoc)
             m_show.setTvdbId(TvDbId(value));
         } else if (type == "tmdb") {
             m_show.setTmdbId(TmdbId(value));
+        } else if (type == "tvmaze") {
+            m_show.setTvMazeId(TvMazeId(value));
         } else {
             qWarning() << "[TvShowXmlReader] Unsupported unique id type:" << type;
         }
@@ -56,6 +58,10 @@ void TvShowXmlReader::parseNfoDom(QDomDocument domDoc)
     }
     if (!domDoc.elementsByTagName("sorttitle").isEmpty()) {
         m_show.setSortTitle(domDoc.elementsByTagName("sorttitle").at(0).toElement().text());
+    }
+    // since v17
+    if (!domDoc.elementsByTagName("originaltitle").isEmpty()) {
+        m_show.setOriginalTitle(domDoc.elementsByTagName("originaltitle").at(0).toElement().text());
     }
     if (!domDoc.elementsByTagName("showtitle").isEmpty()) {
         m_show.setShowTitle(domDoc.elementsByTagName("showtitle").at(0).toElement().text());
@@ -172,8 +178,9 @@ void TvShowXmlReader::parseNfoDom(QDomDocument domDoc)
     }
 
     for (int i = 0, n = domDoc.elementsByTagName("genre").size(); i < n; i++) {
-        for (const QString& genre :
-            domDoc.elementsByTagName("genre").at(i).toElement().text().split(" / ", QString::SkipEmptyParts)) {
+        const auto genres =
+            domDoc.elementsByTagName("genre").at(i).toElement().text().split(" / ", ElchSplitBehavior::SkipEmptyParts);
+        for (const QString& genre : genres) {
             m_show.addGenre(genre);
         }
     }

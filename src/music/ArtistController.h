@@ -3,13 +3,19 @@
 #include "globals/DownloadManagerElement.h"
 #include "globals/Poster.h"
 #include "globals/ScraperInfos.h"
+#include "music/MusicBrainzId.h"
 
 #include <QObject>
 
 class Artist;
 class DownloadManager;
 class MediaCenterInterface;
-class MusicScraperInterface;
+
+namespace mediaelch {
+namespace scraper {
+class MusicScraper;
+}
+} // namespace mediaelch
 
 class ArtistController : public QObject
 {
@@ -20,7 +26,7 @@ public:
 
     bool saveData(MediaCenterInterface* mediaCenterInterface);
     bool loadData(MediaCenterInterface* mediaCenterInterface, bool force = false, bool reloadFromNfo = true);
-    void loadData(QString id, MusicScraperInterface* scraperInterface, QSet<MusicScraperInfo> infos);
+    void loadData(MusicBrainzId id, mediaelch::scraper::MusicScraper* scraperInterface, QSet<MusicScraperInfo> infos);
 
     bool infoLoaded() const;
     void setInfoLoaded(bool infoLoaded);
@@ -33,7 +39,7 @@ public:
 
     void loadImage(ImageType type, QUrl url);
     void loadImages(ImageType type, QVector<QUrl> urls);
-    void scraperLoadDone(MusicScraperInterface* scraper);
+    void scraperLoadDone(mediaelch::scraper::MusicScraper* scraper);
 
 signals:
     void sigInfoLoadDone(Artist*);

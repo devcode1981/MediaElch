@@ -7,13 +7,9 @@
 NotificationBox::NotificationBox(QWidget* parent) : QWidget(parent), ui(new Ui::NotificationBox)
 {
     ui->setupUi(this);
-    m_msgCounter = 0;
     hide();
 }
 
-/**
- * \brief NotificationBox::~NotificationBox
- */
 NotificationBox::~NotificationBox()
 {
     delete ui;
@@ -26,10 +22,7 @@ NotificationBox::~NotificationBox()
  */
 NotificationBox* NotificationBox::instance(QWidget* parent)
 {
-    static NotificationBox* m_instance = nullptr;
-    if (m_instance == nullptr) {
-        m_instance = new NotificationBox(parent);
-    }
+    static NotificationBox* m_instance = new NotificationBox(parent);
     return m_instance;
 }
 
@@ -75,21 +68,29 @@ int NotificationBox::showMessage(QString message, NotificationType type, std::ch
     return m_msgCounter;
 }
 
-/**
- * \brief Removes a message
- * \param id Id of the message to remove
- */
 void NotificationBox::removeMessage(int id)
 {
-    qDebug() << "Entered, id=" << id;
-    for (Message* msg : m_messages) {
+    qDebug() << "[NotificationBox] Removing message with ID:" << id;
+    for (int i = 0; i < m_messages.count();) {
+        auto* msg = m_messages[i];
         if (msg->id() == id) {
             ui->layoutMessages->removeWidget(msg);
+            // Important:
+            // removeWidget() does not change the widget's ownership.
+            // The ownership was transferred to the layout by calling addWidget().
+            // Because we still want to delete the widget, first hide it then
+            // change ownership and only after that delete it.
+            // On systems with Kvantum theme, e.g Manjaro with XFCE, MediaElch
+            // would crash due to SEGFAULT.
+            msg->hide();
+            msg->setParent(this);
             msg->deleteLater();
-            m_messages.removeOne(msg);
-            adjustSize();
+            m_messages.removeAt(i);
+        } else {
+            ++i;
         }
     }
+    adjustSize();
     if (m_messages.isEmpty()) {
         hide();
     }

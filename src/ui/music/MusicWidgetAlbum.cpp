@@ -226,8 +226,8 @@ void MusicWidgetAlbum::onStartScraperSearch()
 
     if (searchWidget->result() == QDialog::Accepted) {
         onSetEnabled(false);
-        m_album->controller()->loadData(searchWidget->scraperId(),
-            searchWidget->scraperId2(),
+        m_album->controller()->loadData(MusicBrainzId(searchWidget->scraperId()),
+            MusicBrainzId(searchWidget->scraperId2()),
             Manager::instance()->scrapers().musicScrapers().at(searchWidget->scraperNo()),
             searchWidget->infosToLoad());
         searchWidget->deleteLater();
@@ -253,8 +253,8 @@ void MusicWidgetAlbum::updateAlbumInfo()
     setContent(ui->artist, m_album->artist());
     setContent(ui->label, m_album->label());
     setContent(ui->releaseDate, m_album->releaseDate());
-    setContent(ui->musicBrainzAlbumId, m_album->mbAlbumId());
-    setContent(ui->musicBrainzReleaseGroupId, m_album->mbReleaseGroupId());
+    setContent(ui->musicBrainzAlbumId, m_album->mbAlbumId().toString());
+    setContent(ui->musicBrainzReleaseGroupId, m_album->mbReleaseGroupId().toString());
     ui->review->blockSignals(true);
     ui->review->setPlainText(m_album->review());
     ui->review->blockSignals(false);
@@ -317,7 +317,7 @@ void MusicWidgetAlbum::onItemChanged(QString text)
         return;
     }
 
-    auto lineEdit = dynamic_cast<QLineEdit*>(sender());
+    auto* lineEdit = dynamic_cast<QLineEdit*>(sender());
     if (lineEdit == nullptr) {
         return;
     }
@@ -332,9 +332,9 @@ void MusicWidgetAlbum::onItemChanged(QString text)
     } else if (property == "releaseDate") {
         m_album->setReleaseDate(text);
     } else if (property == "mbAlbumId") {
-        m_album->setMbAlbumId(text);
+        m_album->setMbAlbumId(MusicBrainzId(text));
     } else if (property == "mbReleaseGroupId") {
-        m_album->setMbReleaseGroupId(text);
+        m_album->setMbReleaseGroupId(MusicBrainzId(text));
     }
 
     ui->buttonRevert->setVisible(true);
@@ -421,23 +421,20 @@ void MusicWidgetAlbum::onChooseImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(image->imageType());
-    imageDialog->clear();
     imageDialog->setAlbum(m_album);
 
     if (!m_album->images(image->imageType()).isEmpty()) {
-        imageDialog->setDownloads(m_album->images(image->imageType()));
-    } else {
-        imageDialog->setDownloads(QVector<Poster>());
+        imageDialog->setDefaultDownloads(m_album->images(image->imageType()));
     }
 
-    imageDialog->exec(image->imageType());
+    imageDialog->execWithType(image->imageType());
     const int exitCode = imageDialog->result();
     const QUrl imageUrl = imageDialog->imageUrl();
     imageDialog->deleteLater();
@@ -455,7 +452,7 @@ void MusicWidgetAlbum::onDeleteImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }
@@ -547,7 +544,7 @@ void MusicWidgetAlbum::onSetImage(Album* album, ImageType type, QByteArray image
 
 void MusicWidgetAlbum::onBookletModelChanged()
 {
-    auto model = dynamic_cast<ImageModel*>(sender());
+    auto* model = dynamic_cast<ImageModel*>(sender());
     if (model == nullptr) {
         return;
     }
@@ -568,12 +565,10 @@ void MusicWidgetAlbum::onAddBooklet()
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(ImageType::AlbumBooklet);
-    imageDialog->clear();
     imageDialog->setMultiSelection(true);
     imageDialog->setAlbum(m_album);
-    imageDialog->setDownloads(QVector<Poster>());
 
-    imageDialog->exec(ImageType::AlbumBooklet);
+    imageDialog->execWithType(ImageType::AlbumBooklet);
     const int exitCode = imageDialog->result();
     const QVector<QUrl> imageUrls = imageDialog->imageUrls();
     imageDialog->deleteLater();

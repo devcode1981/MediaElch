@@ -1,6 +1,7 @@
 #define CATCH_CONFIG_RUNNER
 #include "third_party/catch2/catch.hpp"
 
+#include "globals/Meta.h"
 #include "test/integration/resource_dir.h"
 
 #include <QApplication>
@@ -16,6 +17,7 @@ int main(int argc, char** argv)
     qSetGlobalQHashSeed(0);
 
     QApplication app(argc, argv);
+    registerAllMetaTypes();
     Catch::Session session; // NOLINT(clang-analyzer-core.uninitialized.UndefReturn)
 
     std::string resourceDirString;
@@ -24,7 +26,7 @@ int main(int argc, char** argv)
     // Build a new parser on top of Catch's
     using namespace Catch::clara;
     auto cli = session.cli() // Get Catch's composite command line parser
-               | Opt(resourceDirString, "directory")["-w"]["--resource-dir"](
+               | Opt(resourceDirString, "directory")["--resource-dir"](
                    "The test directory which contains reference NFO files, etc.")
                | Opt(tempDirString, "directory")["--temp-dir"](
                    "The temporary directory to which result files can be written.");
@@ -70,8 +72,16 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    setResourceDir(resourceDir);
-    setTempDir(tempDir);
+    try {
+        setResourceDir(resourceDir);
+        setTempDir(tempDir);
+
+    } catch (const std::runtime_error& error) {
+        std::cerr << "An exception was thrown:" << std::endl;
+        std::cerr << error.what();
+        std::cerr.flush();
+        return 1;
+    }
 
     return session.run();
 }

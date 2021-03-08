@@ -2,6 +2,7 @@ add_library(
   mediaelch_globals OBJECT
   Actor.cpp
   ComboDelegate.cpp
+  Containers.cpp
   DownloadManager.cpp
   DownloadManagerElement.cpp
   Filter.cpp
@@ -14,8 +15,8 @@ add_library(
   MessageIds.cpp
   Meta.cpp
   Math.cpp
-  NameFormatter.cpp
   Poster.cpp
+  Random.cpp
   ScraperInfos.cpp
   ScraperResult.cpp
   ScraperManager.cpp
@@ -25,7 +26,14 @@ add_library(
 )
 
 target_link_libraries(
-  mediaelch_globals PRIVATE Qt5::Core Qt5::Multimedia Qt5::Widgets Qt5::Sql
-                            Qt5::Xml Qt5::MultimediaWidgets
+  mediaelch_globals
+  PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Multimedia
+    Qt5::Widgets
+    Qt5::Sql
+    Qt5::Xml
+    Qt5::MultimediaWidgets
 )
 mediaelch_post_target_defaults(mediaelch_globals)

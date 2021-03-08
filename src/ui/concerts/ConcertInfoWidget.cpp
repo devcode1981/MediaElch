@@ -21,8 +21,12 @@ ConcertInfoWidget::ConcertInfoWidget(QWidget* parent) : QWidget(parent), ui(std:
     ui->badgeWatched->setBadgeType(Badge::Type::BadgeInfo);
 
     // clang-format off
-    connect(ui->name,          &QLineEdit::textChanged,         this, &ConcertInfoWidget::onConcertNameChanged);
-    connect(ui->name,          &QLineEdit::textEdited,          this, &ConcertInfoWidget::onNameChange);
+    connect(ui->tmdbId,        &QLineEdit::textEdited,          this, &ConcertInfoWidget::onTmdbIdChanged);
+    connect(ui->imdbId,        &QLineEdit::textEdited,          this, &ConcertInfoWidget::onImdbIdChanged);
+
+    connect(ui->title,         &QLineEdit::textChanged,         this, &ConcertInfoWidget::onConcertTitleChanged);
+    connect(ui->title,         &QLineEdit::textEdited,          this, &ConcertInfoWidget::onTitleChange);
+    connect(ui->originalTitle, &QLineEdit::textEdited,          this, &ConcertInfoWidget::onOriginalTitleChange);
     connect(ui->artist,        &QLineEdit::textEdited,          this, &ConcertInfoWidget::onArtistChange);
     connect(ui->album,         &QLineEdit::textEdited,          this, &ConcertInfoWidget::onAlbumChange);
     connect(ui->tagline,       &QLineEdit::textEdited,          this, &ConcertInfoWidget::onTaglineChange);
@@ -77,7 +81,10 @@ void ConcertInfoWidget::updateConcertInfo()
     ui->files->setText(nativeFileList.join(", "));
     ui->files->setToolTip(nativeFileList.join("\n"));
 
-    ui->name->setText(m_concertController->concert()->name());
+    ui->title->setText(m_concertController->concert()->title());
+    ui->originalTitle->setText(m_concertController->concert()->originalTitle());
+    ui->imdbId->setText(m_concertController->concert()->imdbId().toString());
+    ui->tmdbId->setText(m_concertController->concert()->tmdbId().toString());
     ui->artist->setText(m_concertController->concert()->artist());
     ui->album->setText(m_concertController->concert()->album());
     ui->tagline->setText(m_concertController->concert()->tagline());
@@ -117,19 +124,6 @@ void ConcertInfoWidget::updateConcertInfo()
     ui->released->blockSignals(false);
     ui->lastPlayed->blockSignals(false);
     ui->overview->blockSignals(false);
-
-    ui->rating->setEnabled(
-        Manager::instance()->mediaCenterInterfaceConcert()->hasFeature(MediaCenterFeature::EditConcertRating));
-    ui->userRating->setEnabled(
-        Manager::instance()->mediaCenterInterfaceConcert()->hasFeature(MediaCenterFeature::EditConcertRating));
-    ui->tagline->setEnabled(
-        Manager::instance()->mediaCenterInterfaceConcert()->hasFeature(MediaCenterFeature::EditConcertTagline));
-    ui->certification->setEnabled(
-        Manager::instance()->mediaCenterInterfaceConcert()->hasFeature(MediaCenterFeature::EditConcertCertification));
-    ui->trailer->setEnabled(
-        Manager::instance()->mediaCenterInterfaceConcert()->hasFeature(MediaCenterFeature::EditConcertTrailer));
-    ui->badgeWatched->setEnabled(
-        Manager::instance()->mediaCenterInterfaceConcert()->hasFeature(MediaCenterFeature::EditConcertWatched));
 }
 
 void ConcertInfoWidget::setRuntime(std::chrono::minutes runtime)
@@ -141,7 +135,10 @@ void ConcertInfoWidget::clear()
 {
     ui->certification->clear();
     ui->files->clear();
-    ui->name->clear();
+    ui->title->clear();
+    ui->originalTitle->clear();
+    ui->tmdbId->clear();
+    ui->imdbId->clear();
     ui->artist->clear();
     ui->album->clear();
     ui->tagline->clear();
@@ -155,24 +152,39 @@ void ConcertInfoWidget::clear()
     ui->overview->clear();
 }
 
-void ConcertInfoWidget::onConcertNameChanged(QString concertName)
+void ConcertInfoWidget::onConcertTitleChanged(QString concertName)
 {
     emit concertNameChanged(concertName);
 }
 
-/**
- * \brief Marks the concert as changed when the name has changed
- */
-void ConcertInfoWidget::onNameChange(QString text)
+void ConcertInfoWidget::onTitleChange(QString text)
 {
     ME_REQUIRE_CONCERT_OR_RETURN;
-    m_concertController->concert()->setName(text);
+    m_concertController->concert()->setTitle(text);
     emit infoChanged();
 }
 
-/**
- * \brief Marks the concert as changed when the artist has changed
- */
+void ConcertInfoWidget::onOriginalTitleChange(QString text)
+{
+    ME_REQUIRE_CONCERT_OR_RETURN;
+    m_concertController->concert()->setOriginalTitle(text);
+    emit infoChanged();
+}
+
+void ConcertInfoWidget::onTmdbIdChanged(QString text)
+{
+    ME_REQUIRE_CONCERT_OR_RETURN;
+    m_concertController->concert()->setTmdbId(TmdbId(text));
+    emit infoChanged();
+}
+
+void ConcertInfoWidget::onImdbIdChanged(QString text)
+{
+    ME_REQUIRE_CONCERT_OR_RETURN;
+    m_concertController->concert()->setImdbId(ImdbId(text));
+    emit infoChanged();
+}
+
 void ConcertInfoWidget::onArtistChange(QString text)
 {
     ME_REQUIRE_CONCERT_OR_RETURN;

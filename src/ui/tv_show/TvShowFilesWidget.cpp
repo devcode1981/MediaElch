@@ -57,10 +57,16 @@ TvShowFilesWidget::TvShowFilesWidget(QWidget* parent) :
 
     Manager::instance()->setTvShowFilesWidget(this);
 
-    connect(m_tvShowProxyModel, &QAbstractItemModel::rowsInserted, this, &TvShowFilesWidget::onViewUpdated);
-    connect(m_tvShowProxyModel, &QAbstractItemModel::rowsRemoved,  this, &TvShowFilesWidget::onViewUpdated);
-    connect(Manager::instance()->tvShowFileSearcher(), &TvShowFileSearcher::tvShowsLoaded, this,  &TvShowFilesWidget::onViewUpdated);
+    connect(m_tvShowProxyModel, &QAbstractItemModel::rowsInserted, this, &TvShowFilesWidget::updateStatusLabel);
+    connect(m_tvShowProxyModel, &QAbstractItemModel::rowsRemoved,  this, &TvShowFilesWidget::updateStatusLabel);
     // clang-format on
+
+    // FIXME:
+    // For some reason, the proxy model emits "rowsRemoved" before "endRemoveRows()" is called in the source model.
+    connect(Manager::instance()->tvShowFileSearcher(),
+        &TvShowFileSearcher::tvShowsLoaded,
+        this,
+        &TvShowFilesWidget::updateStatusLabel);
 }
 
 TvShowFilesWidget::~TvShowFilesWidget()
@@ -435,7 +441,7 @@ void TvShowFilesWidget::showMissingEpisodes()
 
         item.tvShow()->fillMissingEpisodes();
 
-        if (item.tvShow()->tvdbId().isValid() || item.tvShow()->episodeGuideUrl().isEmpty()) {
+        if (item.tvShow()->tvdbId().isValid()) {
             TvShowUpdater::instance()->updateShow(item.tvShow());
             return;
         }
@@ -448,7 +454,7 @@ void TvShowFilesWidget::showMissingEpisodes()
                               "Afterwards MediaElch will check automatically for new episodes on startup."));
             msgBox.setStandardButtons(QMessageBox::Ok);
 
-            QCheckBox dontShowAgain(QObject::tr("Don't show this hint again"), &msgBox);
+            QCheckBox dontShowAgain(tr("Don't show this hint again"), &msgBox);
             dontShowAgain.blockSignals(true);
 
             msgBox.addButton(&dontShowAgain, QMessageBox::ActionRole);
@@ -490,7 +496,7 @@ void TvShowFilesWidget::renewModel(bool force)
 
     if (!force) {
         // When not forced, just update the view.
-        onViewUpdated();
+        updateStatusLabel();
         return;
     }
 
@@ -510,7 +516,7 @@ void TvShowFilesWidget::renewModel(bool force)
         }
     }
 
-    onViewUpdated();
+    updateStatusLabel();
 }
 
 /// \brief Emits sigTvShowSelected, sigSeasonSelected or sigEpisodeSelected based
@@ -519,8 +525,7 @@ void TvShowFilesWidget::onItemSelected(const QModelIndex& current, const QModelI
 {
     Q_UNUSED(previous);
     if (!current.isValid()) {
-        // Can happen if the reload button is clicked
-        qDebug() << "[TvShowFilesWidget] Invalid proxy index: Nothing selected";
+        // root item is selected
         emit sigNothingSelected();
         return;
     }
@@ -570,7 +575,7 @@ QVector<TvShowEpisode*> TvShowFilesWidget::selectedEpisodes(bool includeFromSeas
 
         } else if (item.type() == TvShowType::Season && includeFromSeasonOrShow) {
             auto* seasonModel = dynamic_cast<SeasonModelItem*>(&item);
-            if (seasonModel != nullptr) {
+            if (seasonModel == nullptr) {
                 return;
             }
             for (TvShowEpisode* episode : seasonModel->tvShow()->episodes()) {
@@ -584,7 +589,7 @@ QVector<TvShowEpisode*> TvShowFilesWidget::selectedEpisodes(bool includeFromSeas
 
         } else if (item.type() == TvShowType::TvShow && includeFromSeasonOrShow) {
             auto* showModel = dynamic_cast<TvShowModelItem*>(&item);
-            if (showModel != nullptr) {
+            if (showModel == nullptr) {
                 return;
             }
             for (TvShowEpisode* episode : showModel->tvShow()->episodes()) {
@@ -633,7 +638,7 @@ QVector<TvShow*> TvShowFilesWidget::selectedSeasons()
 /// \brief Update the file-widget view. Updates the status label and invalidates the current
 /// m_tvShowProxyModel. Called when rows are inserted or deleted or when the file searcher
 /// has finished loading.
-void TvShowFilesWidget::onViewUpdated()
+void TvShowFilesWidget::updateStatusLabel()
 {
     const int rowCount = m_tvShowProxyModel->rowCount();
 
@@ -692,9 +697,7 @@ void TvShowFilesWidget::multiScrape()
         return;
     }
 
-    auto* scrapeWidget = new TvShowMultiScrapeDialog(this);
-    scrapeWidget->setShows(shows);
-    scrapeWidget->setEpisodes(episodes);
+    auto* scrapeWidget = new TvShowMultiScrapeDialog(shows, episodes, this);
     const int result = scrapeWidget->exec();
     scrapeWidget->deleteLater();
     if (result == QDialog::Accepted) {

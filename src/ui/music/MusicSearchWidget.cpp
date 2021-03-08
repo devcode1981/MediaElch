@@ -2,7 +2,7 @@
 #include "ui_MusicSearchWidget.h"
 
 #include "globals/Manager.h"
-#include "scrapers/music/MusicScraperInterface.h"
+#include "scrapers/music/MusicScraper.h"
 #include "ui/small_widgets/MyLabel.h"
 #include <QDebug>
 
@@ -13,9 +13,9 @@ MusicSearchWidget::MusicSearchWidget(QWidget* parent) : QWidget(parent), ui(new 
     ui->results->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     ui->searchString->setType(MyLineEdit::TypeLoading);
 
-    for (MusicScraperInterface* scraper : Manager::instance()->scrapers().musicScrapers()) {
+    for (auto* scraper : Manager::instance()->scrapers().musicScrapers()) {
         ui->comboScraper->addItem(scraper->name(), Manager::instance()->scrapers().musicScrapers().indexOf(scraper));
-        connect(scraper, &MusicScraperInterface::sigSearchDone, this, &MusicSearchWidget::showResults);
+        connect(scraper, &mediaelch::scraper::MusicScraper::sigSearchDone, this, &MusicSearchWidget::showResults);
     }
 
     connect(ui->comboScraper,
@@ -58,7 +58,11 @@ MusicSearchWidget::MusicSearchWidget(QWidget* parent) : QWidget(parent), ui(new 
     connect(ui->chkUnCheckAll, &QAbstractButton::clicked, this, &MusicSearchWidget::chkAllToggled);
 
     m_signalMapper = new QSignalMapper(ui->results);
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
     connect(m_signalMapper, elchOverload<int>(&QSignalMapper::mapped), this, &MusicSearchWidget::resultClickedRow);
+#else
+    connect(m_signalMapper, &QSignalMapper::mappedInt, this, &MusicSearchWidget::resultClickedRow);
+#endif
 }
 
 MusicSearchWidget::~MusicSearchWidget()
@@ -115,7 +119,7 @@ void MusicSearchWidget::showResults(QVector<ScraperSearchResult> results)
     ui->searchString->setFocus();
 
     for (const ScraperSearchResult& result : results) {
-        auto label = new MyLabel(ui->results);
+        auto* label = new MyLabel(ui->results);
         QString name = result.name;
         if (result.released.isValid()) {
             name.append(QString(" (%1)").arg(result.released.toString("yyyy")));
@@ -180,7 +184,7 @@ void MusicSearchWidget::chkAllToggled(bool toggled)
     chkToggled();
 }
 
-int MusicSearchWidget::scraperNo()
+int MusicSearchWidget::scraperNo() const
 {
     return m_scraperNo;
 }

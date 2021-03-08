@@ -15,17 +15,13 @@ ConcertModel::ConcertModel(QObject* parent) :
 #endif
 {
 #ifndef Q_OS_WIN
-    auto font = new MyIconFont(this);
+    auto* font = new MyIconFont(this);
     font->initFontAwesome();
     m_syncIcon = font->icon("refresh_cloud", QColor(248, 148, 6), QColor(255, 255, 255), "", 0, 1.0);
     m_newIcon = font->icon("star", QColor(58, 135, 173), QColor(255, 255, 255), "", 0, 1.0);
 #endif
 }
 
-/**
- * \brief Adds a concert to the model
- * \param concert Concert to add
- */
 void ConcertModel::addConcert(Concert* concert)
 {
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
@@ -64,23 +60,21 @@ Concert* ConcertModel::concert(int row)
     return m_concerts.at(row);
 }
 
-/**
- * \brief Returns the rowcount in our model. (=number of movies)
- * \return Number of rows (=number of movies)
- */
 int ConcertModel::rowCount(const QModelIndex& parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        // Root has an invalid model index.
+        return 0;
+    }
     return m_concerts.size();
 }
 
-/**
- * \brief Get the column count of our model
- * \return 1
- */
 int ConcertModel::columnCount(const QModelIndex& parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        // Root has an invalid model index.
+        return 0;
+    }
     // return roleNames().size();
     return 1;
 }
@@ -103,9 +97,9 @@ QVariant ConcertModel::data(const QModelIndex& index, int role) const
 
     Concert* concert = m_concerts[index.row()];
     if (index.column() == 0 && role == Qt::DisplayRole) {
-        return helper::appendArticle(concert->name());
+        return helper::appendArticle(concert->title());
     }
-    if (index.column() == 0 && (role == Qt::ToolTipRole || role == Qt::UserRole + 4)) {
+    if (index.column() == 0 && (role == Qt::ToolTipRole || role == ConcertRoles::FileRole)) {
         if (concert->files().isEmpty()) {
             return QVariant();
         }
@@ -114,13 +108,13 @@ QVariant ConcertModel::data(const QModelIndex& index, int role) const
     if (index.column() == 1 && role == Qt::DisplayRole) {
         return concert->folderName();
     }
-    if (role == Qt::UserRole + 1) {
+    if (role == ConcertRoles::InfoLoadedRole) {
         return concert->controller()->infoLoaded();
     }
-    if (role == Qt::UserRole + 2) {
+    if (role == ConcertRoles::HasChangedRole) {
         return concert->hasChanged();
     }
-    if (role == Qt::UserRole + 3) {
+    if (role == ConcertRoles::SyncNeededRole) {
         return concert->syncNeeded();
         /*
         } else if (role == Qt::ForegroundRole) {
@@ -177,8 +171,8 @@ void ConcertModel::clear()
         return;
     }
     beginRemoveRows(QModelIndex(), 0, m_concerts.size() - 1);
-    for (Concert* concert : m_concerts) {
-        delete concert;
+    for (Concert* concert : asConst(m_concerts)) {
+        concert->deleteLater();
     }
     m_concerts.clear();
     endRemoveRows();

@@ -1,37 +1,41 @@
+add_subdirectory(tmdb)
+add_subdirectory(imdb)
 add_subdirectory(image)
+add_subdirectory(movie)
+add_subdirectory(tv_show)
 
 add_library(
   mediaelch_scrapers OBJECT
   # Headers so that moc is run on them
-  concert/ConcertScraperInterface.h
-  movie/MovieScraperInterface.h
-  music/MusicScraperInterface.h
-  tv_show/TvScraperInterface.h
+  music/MusicScraper.h
   # Sources
   ScraperInterface.cpp
-  concert/TMDbConcerts.cpp
-  movie/AdultDvdEmpire.cpp
-  movie/AEBN.cpp
-  movie/CustomMovieScraper.cpp
-  movie/HotMovies.cpp
-  movie/IMDB.cpp
-  movie/imdb/ImdbMovieScraper.cpp
-  movie/MovieScraperInterface.cpp
-  movie/OFDb.cpp
-  movie/TMDb.cpp
-  movie/VideoBuster.cpp
+  ScraperError.cpp
+  concert/ConcertIdentifier.cpp
+  concert/ConcertScraper.cpp
+  concert/ConcertSearchJob.cpp
+  concert/tmdb/TmdbConcert.cpp
+  concert/tmdb/TmdbConcertSearchJob.cpp
+  movie/MovieIdentifier.cpp
+  movie/MovieScraper.cpp
   music/TvTunes.cpp
+  music/AllMusic.cpp
   music/UniversalMusicScraper.cpp
+  music/MusicBrainz.cpp
+  music/TheAudioDb.cpp
+  music/MusicScraper.cpp
+  music/Discogs.cpp
   trailer/HdTrailers.cpp
   trailer/TrailerProvider.cpp
-  tv_show/TheTvDb.cpp
-  tv_show/thetvdb/ApiRequest.cpp
-  tv_show/thetvdb/Cache.cpp
-  tv_show/thetvdb/EpisodeLoader.cpp
-  tv_show/thetvdb/EpisodeParser.cpp
-  tv_show/thetvdb/Search.cpp
-  tv_show/thetvdb/ShowLoader.cpp
-  tv_show/thetvdb/ShowParser.cpp
+  tv_show/ShowMerger.cpp
+  tv_show/ShowIdentifier.cpp
+  tv_show/EpisodeIdentifier.cpp
+  tv_show/TvScraper.cpp
+  tv_show/EpisodeScrapeJob.cpp
+  tv_show/ShowScrapeJob.cpp
+  tv_show/ShowSearchJob.cpp
+  tv_show/SeasonScrapeJob.cpp
+  tv_show/empty/EmptyTvScraper.cpp
 )
 
 target_link_libraries(

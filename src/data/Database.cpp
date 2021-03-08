@@ -1,23 +1,24 @@
 #include "Database.h"
 
+#include "concerts/Concert.h"
+#include "data/Subtitle.h"
+#include "globals/Helper.h"
+#include "globals/Manager.h"
+#include "globals/Meta.h"
+#include "media_centers/KodiXml.h"
+#include "media_centers/kodi/EpisodeXmlWriter.h"
+#include "movies/Movie.h"
+#include "music/Album.h"
+#include "music/Artist.h"
+#include "settings/Settings.h"
+#include "tv_shows/TvShow.h"
+
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSqlRecord>
-
-#include "concerts/Concert.h"
-#include "data/Subtitle.h"
-#include "globals/Helper.h"
-#include "globals/Manager.h"
-#include "media_centers/KodiXml.h"
-#include "media_centers/kodi/v18/EpisodeXmlWriterV18.h"
-#include "movies/Movie.h"
-#include "music/Album.h"
-#include "music/Artist.h"
-#include "settings/Settings.h"
-#include "tv_shows/TvShow.h"
 
 using namespace mediaelch;
 
@@ -229,16 +230,13 @@ Database::Database(QObject* parent) : QObject(parent)
     }
 }
 
-/**
- * \brief Database::~Database
- */
 Database::~Database()
 {
-    if ((m_db != nullptr) && m_db->isOpen()) {
+    if (m_db != nullptr && m_db->isOpen()) {
         m_db->close();
-        delete m_db;
-        m_db = nullptr;
     }
+    delete m_db;
+    m_db = nullptr;
 }
 
 void Database::updateDbVersion(int version)
@@ -305,6 +303,8 @@ void Database::clearAllMovies()
 
 void Database::clearMoviesInDirectory(DirectoryPath path)
 {
+    QMutexLocker locker(&m_mutex);
+
     QSqlQuery query(db());
     query.prepare("DELETE FROM movieFiles WHERE idMovie IN (SELECT idMovie FROM movies WHERE path=:path)");
     query.bindValue(":path", path.toString().toUtf8());
@@ -319,6 +319,8 @@ void Database::clearMoviesInDirectory(DirectoryPath path)
 
 void Database::add(Movie* movie, DirectoryPath path)
 {
+    QMutexLocker locker(&m_mutex);
+
     QSqlQuery query(db());
     query.prepare("INSERT INTO movies(content, lastModified, inSeparateFolder, hasPoster, hasBackdrop, hasLogo, "
                   "hasClearArt, hasCdArt, hasBanner, hasThumb, hasExtraFanarts, discType, path) "
@@ -397,6 +399,7 @@ void Database::update(Movie* movie)
 
 QVector<Movie*> Database::moviesInDirectory(DirectoryPath path)
 {
+    QMutexLocker locker(&m_mutex);
     transaction();
     QSqlQuery query(db());
     query.prepare("SELECT M.idMovie, M.content, M.lastModified, M.inSeparateFolder, M.hasPoster, M.hasBackdrop, "
@@ -462,7 +465,7 @@ QVector<Movie*> Database::moviesInDirectory(DirectoryPath path)
         if (movie == nullptr) {
             continue;
         }
-        auto subtitle = new Subtitle(movie);
+        auto* subtitle = new Subtitle(movie);
         subtitle->setForced(query.value(query.record().indexOf("forced")).toInt() == 1);
         subtitle->setLanguage(query.value(query.record().indexOf("language")).toString());
         subtitle->setFiles(query.value(query.record().indexOf("files")).toString().split("%§%"));
@@ -870,7 +873,7 @@ void Database::clearEpisodeList(int showsSettingsId)
 
 void Database::addEpisodeToShowList(TvShowEpisode* episode, int showsSettingsId, TvDbId tvdbid)
 {
-    kodi::EpisodeXmlWriterV18 xmlWriter({episode});
+    kodi::EpisodeXmlWriterGeneric xmlWriter(KodiVersion::latest(), {episode});
     const QByteArray xmlContent = xmlWriter.getEpisodeXml();
 
     QSqlQuery query(db());
@@ -963,6 +966,8 @@ bool Database::guessImport(QString fileName, QString& type, QString& path)
 
 void Database::setLabel(const mediaelch::FileList& fileNames, ColorLabel colorLabel)
 {
+    // no locker, as this function is called by add()
+
     int color = static_cast<int>(colorLabel);
     QSqlQuery query(db());
     int id = 1;
@@ -994,6 +999,8 @@ void Database::setLabel(const mediaelch::FileList& fileNames, ColorLabel colorLa
 
 ColorLabel Database::getLabel(const mediaelch::FileList& fileNames)
 {
+    QMutexLocker locker(&m_mutex);
+
     if (fileNames.isEmpty()) {
         return ColorLabel::NoLabel;
     }
@@ -1001,9 +1008,9 @@ ColorLabel Database::getLabel(const mediaelch::FileList& fileNames)
     QSqlQuery query(db());
     query.prepare("SELECT color FROM labels WHERE fileName=:fileName");
     query.bindValue(":fileName", fileNames.first().toString().toUtf8());
-    query.exec();
-    if (query.next()) {
-        return static_cast<ColorLabel>(query.value(query.record().indexOf("color")).toInt());
+    bool success = query.exec();
+    if (success && query.next()) {
+        return static_cast<ColorLabel>(query.value("color").toInt());
     }
 
     return ColorLabel::NoLabel;

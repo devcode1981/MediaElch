@@ -8,19 +8,25 @@
 #include <QObject>
 #include <QString>
 
-class IMDB;
+namespace mediaelch {
+namespace scraper {
+
+class ImdbMovie;
+class ImdbApi;
 
 class ImdbMovieLoader : public QObject
 {
     Q_OBJECT
 public:
-    ImdbMovieLoader(IMDB& scraper,
-        QString imdbId,
+    ImdbMovieLoader(ImdbApi& api,
+        ImdbMovie& scraper,
+        ImdbId imdbId,
         Movie& movie,
         QSet<MovieScraperInfo> infos,
         bool loadAllTags,
         QObject* parent = nullptr) :
         QObject(parent),
+        m_api{api},
         m_scraper{scraper},
         m_imdbId{std::move(imdbId)},
         m_movie{movie},
@@ -34,22 +40,15 @@ public:
 signals:
     void sigLoadDone(Movie& movie, ImdbMovieLoader* loader);
 
-private slots:
-    void onLoadFinished();
-    void onPosterLoadFinished();
-    void onTagsFinished();
-
-    void onActorImageUrlLoadDone();
-
 private:
     void loadPoster(const QUrl& posterViewerUrl);
     void loadTags();
     void loadActorImageUrls();
 
     void parseAndAssignInfos(const QString& html);
-    void parseAndAssignPoster(const QString& html, QString posterId);
+    void parseAndAssignPoster(const QString& html);
     void parseAndStoreActors(const QString& html);
-    QUrl parsePoster(const QString& html);
+    QUrl parsePosterViewerUrl(const QString& html);
     void parseAndAssignTags(const QString& html);
     QString parseActorImageUrl(const QString& html);
 
@@ -57,11 +56,11 @@ private:
     void decreaseDownloadCount();
 
 private:
-    QMutex m_mutex;
     int m_itemsLeftToDownloads = 0;
 
-    IMDB& m_scraper;
-    QString m_imdbId;
+    ImdbApi& m_api;
+    ImdbMovie& m_scraper;
+    ImdbId m_imdbId;
     Movie& m_movie;
     QSet<MovieScraperInfo> m_infos;
     mediaelch::network::NetworkManager m_network;
@@ -69,3 +68,6 @@ private:
 
     QVector<QPair<Actor, QUrl>> m_actorUrls;
 };
+
+} // namespace scraper
+} // namespace mediaelch

@@ -19,10 +19,10 @@ ArtistXmlReader::ArtistXmlReader(Artist& artist) : m_artist{artist}
 void ArtistXmlReader::parseNfoDom(QDomDocument domDoc)
 {
     if (!domDoc.elementsByTagName("musicBrainzArtistID").isEmpty()) {
-        m_artist.setMbId(domDoc.elementsByTagName("musicBrainzArtistID").at(0).toElement().text());
+        m_artist.setMbId(MusicBrainzId(domDoc.elementsByTagName("musicBrainzArtistID").at(0).toElement().text()));
     }
     if (!domDoc.elementsByTagName("allmusicid").isEmpty()) {
-        m_artist.setAllMusicId(domDoc.elementsByTagName("allmusicid").at(0).toElement().text());
+        m_artist.setAllMusicId(AllMusicId(domDoc.elementsByTagName("allmusicid").at(0).toElement().text()));
     }
     if (!domDoc.elementsByTagName("name").isEmpty()) {
         m_artist.setName(domDoc.elementsByTagName("name").at(0).toElement().text());
@@ -31,7 +31,7 @@ void ArtistXmlReader::parseNfoDom(QDomDocument domDoc)
         QDomNodeList genreElements = domDoc.elementsByTagName("genre");
         QStringList genres;
         for (int i = 0, n = genreElements.size(); i < n; i++) {
-            genres << genreElements.at(i).toElement().text().split(" / ", QString::SkipEmptyParts);
+            genres << genreElements.at(i).toElement().text().split(" / ", ElchSplitBehavior::SkipEmptyParts);
         }
         if (!genres.isEmpty()) {
             m_artist.setGenres(genres);

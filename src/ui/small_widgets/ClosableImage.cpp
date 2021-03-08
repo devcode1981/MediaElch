@@ -155,8 +155,8 @@ void ClosableImage::paintEvent(QPaintEvent* event)
     }
 
     QImage img;
-    int origWidth;
-    int origHeight;
+    int origWidth = 0;
+    int origHeight = 0;
     const int w = static_cast<int>((width() - 9) * helper::devicePixelRatio(this));
     if (!m_image.isNull()) {
         img = QImage::fromData(m_image);
@@ -421,7 +421,7 @@ bool ClosableImage::confirmDeleteImage()
     msgBox.setWindowTitle(tr("Really delete image?"));
     msgBox.setText(tr("Are you sure you want to delete this image?"));
     msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    QCheckBox dontPrompt(QObject::tr("Do not ask again"), &msgBox);
+    QCheckBox dontPrompt(tr("Do not ask again"), &msgBox);
     dontPrompt.blockSignals(true);
     msgBox.addButton(&dontPrompt, QMessageBox::ActionRole);
     int ret = msgBox.exec();

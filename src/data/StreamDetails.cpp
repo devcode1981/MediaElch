@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QProcess>
+#include <QRegularExpression>
 
 #include "data/MediaInfoFile.h"
 
@@ -84,19 +85,19 @@ void StreamDetails::loadStreamDetails()
         QString biggest;
         qint64 biggestSize = 0;
         QFileInfo fi(firstFile);
-        for (const QFileInfo& fiVob :
-            fi.dir().entryInfoList(QStringList{"VTS_*.VOB", "vts_*.vob"}, QDir::Files, QDir::Name)) {
-            QRegExp rx("VTS_([0-9]*)_[0-9]*.VOB");
-            rx.setMinimal(true);
-            rx.setCaseSensitivity(Qt::CaseInsensitive);
-            if (rx.indexIn(fiVob.fileName()) != -1) {
-                if (!sizes.contains(rx.cap(1))) {
-                    sizes.insert(rx.cap(1), 0);
+        const auto entries = fi.dir().entryInfoList(QStringList{"VTS_*.VOB", "vts_*.vob"}, QDir::Files, QDir::Name);
+        for (const QFileInfo& fiVob : entries) {
+            QRegularExpression rx("VTS_([0-9]*)_[0-9]*.VOB",
+                QRegularExpression::InvertedGreedinessOption | QRegularExpression::CaseInsensitiveOption);
+            QRegularExpressionMatch match = rx.match(fiVob.fileName());
+            if (match.hasMatch()) {
+                if (!sizes.contains(match.captured(1))) {
+                    sizes.insert(match.captured(1), 0);
                 }
-                sizes[rx.cap(1)] += fiVob.size();
-                if (sizes[rx.cap(1)] > biggestSize) {
-                    biggestSize = sizes[rx.cap(1)];
-                    biggest = rx.cap(1);
+                sizes[match.captured(1)] += fiVob.size();
+                if (sizes[match.captured(1)] > biggestSize) {
+                    biggestSize = sizes[match.captured(1)];
+                    biggest = match.captured(1);
                 }
             }
         }
@@ -261,16 +262,17 @@ QString StreamDetails::audioCodec() const
     QString hdCodec;
     QString normalCodec;
     QString sdCodec;
+    QString defaultCodec;
     for (int i = 0, n = m_audioDetails.count(); i < n; ++i) {
         QString codec = m_audioDetails.at(i).value(AudioDetails::Codec);
         if (m_hdAudioCodecs.contains(codec)) {
             hdCodec = codec;
-        }
-        if (m_normalAudioCodecs.contains(codec)) {
+        } else if (m_normalAudioCodecs.contains(codec)) {
             normalCodec = codec;
-        }
-        if (m_sdAudioCodecs.contains(codec)) {
+        } else if (m_sdAudioCodecs.contains(codec)) {
             sdCodec = codec;
+        } else {
+            defaultCodec = codec;
         }
     }
 
@@ -283,7 +285,7 @@ QString StreamDetails::audioCodec() const
     if (!sdCodec.isEmpty()) {
         return sdCodec;
     }
-    return "";
+    return defaultCodec;
 }
 
 QString StreamDetails::videoCodec() const

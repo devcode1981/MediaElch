@@ -29,6 +29,7 @@ QT += core gui network xml sql widgets multimedia multimediawidgets \
       concurrent qml quick quickwidgets opengl
 
 CONFIG += warn_on c++14
+CONFIG += lrelease embed_translations
 
 !contains(DEFINES, EXTERN_QUAZIP) {
     # using internal 3rd party QUAZIP
@@ -106,8 +107,20 @@ QMAKE_INFO_PLIST = MediaElch.plist
 SOURCES += src/main.cpp \
     src/concerts/ConcertController.cpp \
     src/data/MediaInfoFile.cpp \
+    src/export/CsvExport.cpp \
+    src/globals/Containers.cpp \
+    src/globals/Random.cpp \
+    src/music/AllMusicId.cpp \
+    src/music/MusicBrainzId.cpp \
+    src/music/TheAudioDbId.cpp \
+    src/network/HttpStatusCodes.cpp \
     src/network/NetworkRequest.cpp \
     src/network/NetworkManager.cpp \
+    src/scrapers/ScraperError.cpp \
+    src/scrapers/music/AllMusic.cpp \
+    src/scrapers/music/Discogs.cpp \
+    src/scrapers/music/MusicBrainz.cpp \
+    src/scrapers/music/TheAudioDb.cpp \
     src/ui/concerts/ConcertFilesWidget.cpp \
     src/ui/concerts/ConcertSearch.cpp \
     src/ui/concerts/ConcertSearchWidget.cpp \
@@ -123,6 +136,7 @@ SOURCES += src/main.cpp \
     src/data/ResumeTime.cpp \
     src/movies/Movie.cpp \
     src/movies/file_searcher/MovieFileSearcher.cpp \
+    src/movies/file_searcher/MovieDirectorySearcher.cpp \
     src/movies/MovieFilesOrganizer.cpp \
     src/movies/MovieImages.cpp \
     src/movies/MovieModel.cpp \
@@ -135,6 +149,7 @@ SOURCES += src/main.cpp \
     src/tv_shows/TvShow.cpp \
     src/tv_shows/TvShowEpisode.cpp \
     src/tv_shows/TvShowFileSearcher.cpp \
+    src/ui/export/CsvExportDialog.cpp \
     src/ui/imports/ImportActions.cpp \
     src/ui/imports/ImportDialog.cpp \
     src/ui/imports/DownloadsWidget.cpp \
@@ -152,6 +167,7 @@ SOURCES += src/main.cpp \
     src/export/MediaExport.cpp \
     src/export/SimpleEngine.cpp \
     src/file/FileFilter.cpp \
+    src/file/FilenameUtils.cpp \
     src/file/Path.cpp \
     src/globals/Actor.cpp \
     src/globals/ComboDelegate.cpp \
@@ -167,7 +183,7 @@ SOURCES += src/main.cpp \
     src/globals/MessageIds.cpp \
     src/globals/Math.cpp \
     src/globals/Meta.cpp \
-    src/globals/NameFormatter.cpp \
+    src/file/NameFormatter.cpp \
     src/network/NetworkReplyWatcher.cpp \
     src/network/WebsiteCache.cpp \
     src/globals/Poster.cpp \
@@ -189,7 +205,9 @@ SOURCES += src/main.cpp \
     src/ui/main/Message.cpp \
     src/ui/main/MyIconFont.cpp \
     src/ui/main/Navbar.cpp \
+    src/ui/main/QuickOpen.cpp \
     src/ui/main/Update.cpp \
+    src/media_centers/kodi/KodiXmlWriter.cpp \
     src/media_centers/kodi/AlbumXmlReader.cpp \
     src/media_centers/kodi/AlbumXmlWriter.cpp \
     src/media_centers/kodi/ArtistXmlReader.cpp \
@@ -198,29 +216,10 @@ SOURCES += src/main.cpp \
     src/media_centers/kodi/ConcertXmlWriter.cpp \
     src/media_centers/kodi/EpisodeXmlWriter.cpp \
     src/media_centers/kodi/EpisodeXmlReader.cpp \
-    src/media_centers/kodi/KodiNfoMeta.cpp \
     src/media_centers/kodi/MovieXmlReader.cpp \
     src/media_centers/kodi/MovieXmlWriter.cpp \
     src/media_centers/kodi/TvShowXmlReader.cpp \
     src/media_centers/kodi/TvShowXmlWriter.cpp \
-    src/media_centers/kodi/v16/ArtistXmlWriterV16.cpp \
-    src/media_centers/kodi/v16/AlbumXmlWriterV16.cpp \
-    src/media_centers/kodi/v16/ConcertXmlWriterV16.cpp \
-    src/media_centers/kodi/v16/EpisodeXmlWriterV16.cpp \
-    src/media_centers/kodi/v16/MovieXmlWriterV16.cpp \
-    src/media_centers/kodi/v16/TvShowXmlWriterV16.cpp \
-    src/media_centers/kodi/v17/ArtistXmlWriterV17.cpp \
-    src/media_centers/kodi/v17/AlbumXmlWriterV17.cpp \
-    src/media_centers/kodi/v17/ConcertXmlWriterV17.cpp \
-    src/media_centers/kodi/v17/EpisodeXmlWriterV17.cpp \
-    src/media_centers/kodi/v17/MovieXmlWriterV17.cpp \
-    src/media_centers/kodi/v17/TvShowXmlWriterV17.cpp \
-    src/media_centers/kodi/v18/ArtistXmlWriterV18.cpp \
-    src/media_centers/kodi/v18/AlbumXmlWriterV18.cpp \
-    src/media_centers/kodi/v18/ConcertXmlWriterV18.cpp \
-    src/media_centers/kodi/v18/EpisodeXmlWriterV18.cpp \
-    src/media_centers/kodi/v18/MovieXmlWriterV18.cpp \
-    src/media_centers/kodi/v18/TvShowXmlWriterV18.cpp \
     src/media_centers/KodiVersion.cpp \
     src/media_centers/KodiXml.cpp \
     src/ui/movies/CertificationWidget.cpp \
@@ -257,33 +256,84 @@ SOURCES += src/main.cpp \
     src/renamer/Renamer.cpp \
     src/renamer/RenamerDialog.cpp \
     src/renamer/RenamerPlaceholders.cpp \
+    src/scrapers/tmdb/TmdbApi.cpp \
     src/scrapers/ScraperInterface.cpp \
     src/scrapers/image/FanartTv.cpp \
     src/scrapers/image/FanartTvMusic.cpp \
     src/scrapers/image/FanartTvMusicArtists.cpp \
     src/scrapers/image/TheTvDbImages.cpp \
     src/scrapers/image/TMDbImages.cpp \
-    src/scrapers/concert/TMDbConcerts.cpp \
-    src/scrapers/movie/AdultDvdEmpire.cpp \
-    src/scrapers/movie/AEBN.cpp \
-    src/scrapers/movie/CustomMovieScraper.cpp \
-    src/scrapers/movie/HotMovies.cpp \
-    src/scrapers/movie/IMDB.cpp \
+    src/scrapers/concert/ConcertIdentifier.cpp \
+    src/scrapers/concert/ConcertScraper.cpp \
+    src/scrapers/concert/ConcertSearchJob.cpp \
+    src/scrapers/concert/tmdb/TmdbConcert.cpp \
+    src/scrapers/concert/tmdb/TmdbConcertSearchJob.cpp \
+    src/scrapers/movie/adultdvdempire/AdultDvdEmpire.cpp \
+    src/scrapers/movie/adultdvdempire/AdultDvdEmpireApi.cpp \
+    src/scrapers/movie/aebn/AEBN.cpp \
+    src/scrapers/movie/aebn/AebnApi.cpp \
+    src/scrapers/movie/custom/CustomMovieScraper.cpp \
+    src/scrapers/movie/hotmovies/HotMovies.cpp \
+    src/scrapers/movie/hotmovies/HotMoviesApi.cpp \
+    src/scrapers/movie/imdb/ImdbMovie.cpp \
     src/scrapers/movie/imdb/ImdbMovieScraper.cpp \
-    src/scrapers/movie/MovieScraperInterface.cpp \
-    src/scrapers/movie/OFDb.cpp \
-    src/scrapers/movie/TMDb.cpp \
-    src/scrapers/movie/VideoBuster.cpp \
+    src/scrapers/movie/MovieScraper.cpp \
+    src/scrapers/music/MusicScraper.cpp \
+    src/scrapers/movie/ofdb/OFDb.cpp \
+    src/scrapers/movie/ofdb/OfdbApi.cpp \
+    src/scrapers/movie/tmdb/TmdbMovie.cpp \
+    src/scrapers/movie/videobuster/VideoBuster.cpp \
+    src/scrapers/movie/videobuster/VideoBusterApi.cpp \
     src/scrapers/music/TvTunes.cpp \
     src/scrapers/music/UniversalMusicScraper.cpp \
-    src/scrapers/tv_show/TheTvDb.cpp \
-    src/scrapers/tv_show/thetvdb/ApiRequest.cpp \
-    src/scrapers/tv_show/thetvdb/Cache.cpp \
-    src/scrapers/tv_show/thetvdb/EpisodeLoader.cpp \
-    src/scrapers/tv_show/thetvdb/EpisodeParser.cpp \
-    src/scrapers/tv_show/thetvdb/Search.cpp \
-    src/scrapers/tv_show/thetvdb/ShowLoader.cpp \
-    src/scrapers/tv_show/thetvdb/ShowParser.cpp \
+    src/scrapers/tv_show/ShowIdentifier.cpp \
+    src/scrapers/tv_show/EpisodeIdentifier.cpp \
+    src/scrapers/tv_show/TvScraper.cpp \
+    src/scrapers/tv_show/EpisodeScrapeJob.cpp \
+    src/scrapers/tv_show/ShowScrapeJob.cpp \
+    src/scrapers/tv_show/ShowSearchJob.cpp \
+    src/scrapers/tv_show/SeasonScrapeJob.cpp \
+    src/scrapers/tv_show/ShowMerger.cpp \
+    src/scrapers/tv_show/empty/EmptyTvScraper.cpp \
+    src/scrapers/tv_show/custom/CustomTvScraper.cpp \
+    src/scrapers/tv_show/custom/CustomTvScraperConfig.cpp \
+    src/scrapers/tv_show/custom/CustomEpisodeScrapeJob.cpp \
+    src/scrapers/tv_show/custom/CustomSeasonScrapeJob.cpp \
+    src/scrapers/tv_show/custom/CustomShowScrapeJob.cpp \
+    src/scrapers/tv_show/imdb/ImdbTv.cpp \
+    src/scrapers/imdb/ImdbApi.cpp \
+    src/scrapers/tv_show/imdb/ImdbTvEpisodeParser.cpp \
+    src/scrapers/tv_show/imdb/ImdbTvEpisodeScrapeJob.cpp \
+    src/scrapers/tv_show/imdb/ImdbTvShowSearchJob.cpp \
+    src/scrapers/tv_show/imdb/ImdbTvShowParser.cpp \
+    src/scrapers/tv_show/imdb/ImdbTvShowScrapeJob.cpp \
+    src/scrapers/tv_show/imdb/ImdbTvSeasonParser.cpp \
+    src/scrapers/tv_show/imdb/ImdbTvSeasonScrapeJob.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDb.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDbApi.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDbEpisodeScrapeJob.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDbEpisodeParser.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDbEpisodesParser.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDbShowSearchJob.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDbShowScrapeJob.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDbSeasonScrapeJob.cpp \
+    src/scrapers/tv_show/thetvdb/TheTvDbShowParser.cpp \
+    src/scrapers/tv_show/tvmaze/TvMaze.cpp \
+    src/scrapers/tv_show/tvmaze/TvMazeApi.cpp \
+    src/scrapers/tv_show/tvmaze/TvMazeEpisodeScrapeJob.cpp \
+    src/scrapers/tv_show/tvmaze/TvMazeEpisodeParser.cpp \
+    src/scrapers/tv_show/tvmaze/TvMazeShowSearchJob.cpp \
+    src/scrapers/tv_show/tvmaze/TvMazeShowScrapeJob.cpp \
+    src/scrapers/tv_show/tvmaze/TvMazeSeasonScrapeJob.cpp \
+    src/scrapers/tv_show/tvmaze/TvMazeShowParser.cpp \
+    src/scrapers/tv_show/tmdb/TmdbTv.cpp \
+    src/scrapers/tv_show/tmdb/TmdbTvEpisodeScrapeJob.cpp \
+    src/scrapers/tv_show/tmdb/TmdbTvShowSearchJob.cpp \
+    src/scrapers/tv_show/tmdb/TmdbTvShowParser.cpp \
+    src/scrapers/tv_show/tmdb/TmdbTvEpisodeParser.cpp \
+    src/scrapers/tv_show/tmdb/TmdbTvSeasonParser.cpp \
+    src/scrapers/tv_show/tmdb/TmdbTvShowScrapeJob.cpp \
+    src/scrapers/tv_show/tmdb/TmdbTvSeasonScrapeJob.cpp \
     src/ui/movie_sets/MovieListDialog.cpp \
     src/ui/movie_sets/SetsWidget.cpp \
     src/settings/AdvancedSettings.cpp \
@@ -307,6 +357,7 @@ SOURCES += src/main.cpp \
     src/ui/settings/NetworkSettingsWidget.cpp \
     src/ui/settings/ScraperSettingsWidget.cpp \
     src/ui/settings/TvScraperSettingsWidget.cpp \
+    src/ui/settings/CustomTvScraperSettingsWidget.cpp \
     src/ui/settings/TvShowSettingsWidget.cpp \
     src/ui/small_widgets/AlphabeticalList.cpp \
     src/ui/small_widgets/Badge.cpp \
@@ -314,6 +365,7 @@ SOURCES += src/main.cpp \
     src/ui/small_widgets/FilterWidget.cpp \
     src/ui/small_widgets/ImageGallery.cpp \
     src/ui/small_widgets/ImageLabel.cpp \
+    src/ui/small_widgets/LanguageCombo.cpp \
     src/ui/small_widgets/LoadingStreamDetails.cpp \
     src/ui/small_widgets/MediaFlags.cpp \
     src/ui/small_widgets/MessageLabel.cpp \
@@ -336,9 +388,10 @@ SOURCES += src/main.cpp \
     src/ui/tv_show/TvShowFilesWidget.cpp \
     src/ui/support/SupportDialog.cpp \
     src/scrapers/trailer/HdTrailers.cpp \
+    src/ui/tv_show/TvShowCommonWidgets.cpp \
     src/ui/tv_show/TvShowMultiScrapeDialog.cpp \
     src/ui/tv_show/TvShowSearch.cpp \
-    src/ui/tv_show/TvShowSearchEpisode.cpp \
+    src/ui/tv_show/TvShowSearchWidget.cpp \
     src/tv_shows/TvShowUpdater.cpp \
     src/tv_shows/TvShowUtils.cpp \
     src/ui/tv_show/TvShowWidget.cpp \
@@ -346,6 +399,7 @@ SOURCES += src/main.cpp \
     src/ui/tv_show/TvShowWidgetSeason.cpp \
     src/ui/tv_show/TvShowWidgetTvShow.cpp \
     src/ui/tv_show/TvTunesDialog.cpp \
+    src/tv_shows/EpisodeMap.cpp \
     src/tv_shows/TvShowModel.cpp \
     src/tv_shows/TvShowProxyModel.cpp \
     src/tv_shows/model/TvShowModelItem.cpp \
@@ -357,12 +411,14 @@ SOURCES += src/main.cpp \
     src/data/ImdbId.cpp \
     src/data/TmdbId.cpp \
     src/tv_shows/TvDbId.cpp \
+    src/tv_shows/TvMazeId.cpp \
     src/tv_shows/EpisodeNumber.cpp \
     src/tv_shows/SeasonNumber.cpp \
     src/tv_shows/SeasonOrder.cpp \
     src/data/Certification.cpp \
     src/movies/MovieCrew.cpp \
-    src/movies/MovieSet.cpp
+    src/movies/MovieSet.cpp \
+    src/scrapers/movie/MovieIdentifier.cpp
 
 macx {
     OBJECTIVE_SOURCES += src/ui/notifications/MacNotificationHandler.mm
@@ -371,8 +427,20 @@ macx {
 HEADERS  += Version.h \
     src/concerts/ConcertController.h \
     src/data/MediaInfoFile.h \
+    src/export/CsvExport.h \
+    src/globals/Containers.h \
+    src/globals/Random.h \
+    src/music/AllMusicId.h \
+    src/music/MusicBrainzId.h \
+    src/music/TheAudioDbId.h \
+    src/network/HttpStatusCodes.h \
     src/network/NetworkRequest.h \
     src/network/NetworkManager.h \
+    src/scrapers/ScraperError.h \
+    src/scrapers/music/AllMusic.h \
+    src/scrapers/music/Discogs.h \
+    src/scrapers/music/MusicBrainz.h \
+    src/scrapers/music/TheAudioDb.h \
     src/ui/concerts/ConcertFilesWidget.h \
     src/ui/concerts/ConcertSearch.h \
     src/ui/concerts/ConcertSearchWidget.h \
@@ -389,15 +457,17 @@ HEADERS  += Version.h \
     src/media_centers/MediaCenterInterface.h \
     src/movies/Movie.h \
     src/movies/file_searcher/MovieFileSearcher.h \
+    src/movies/file_searcher/MovieDirectorySearcher.h \
     src/movies/MovieFilesOrganizer.h \
     src/movies/MovieImages.h \
     src/movies/MovieModel.h \
     src/movies/MovieProxyModel.h \
-    src/scrapers/image/ImageProviderInterface.h \
-    src/scrapers/concert/ConcertScraperInterface.h \
-    src/scrapers/music/MusicScraperInterface.h \
-    src/scrapers/movie/MovieScraperInterface.h \
-    src/scrapers/tv_show/TvScraperInterface.h \
+    src/scrapers/image/ImageProvider.h \
+    src/scrapers/concert/ConcertIdentifier.h \
+    src/scrapers/concert/ConcertScraper.h \
+    src/scrapers/concert/ConcertSearchJob.h \
+    src/scrapers/music/MusicScraper.h \
+    src/scrapers/movie/MovieScraper.h \
     src/scrapers/ScraperInterface.h \
     src/data/Locale.h \
     src/data/Rating.h \
@@ -413,6 +483,7 @@ HEADERS  += Version.h \
     src/imports/MakeMkvCon.h \
     src/imports/MyFile.h \
     src/log/Log.h \
+    src/ui/export/CsvExportDialog.h \
     src/ui/export/ExportDialog.h \
     src/ui/imports/DownloadsWidget.h \
     src/ui/imports/ImportActions.h \
@@ -424,6 +495,7 @@ HEADERS  += Version.h \
     src/export/MediaExport.h \
     src/export/SimpleEngine.h \
     src/file/FileFilter.h \
+    src/file/FilenameUtils.h \
     src/file/Path.h \
     src/globals/Actor.h \
     src/globals/ComboDelegate.h \
@@ -440,7 +512,7 @@ HEADERS  += Version.h \
     src/globals/MessageIds.h \
     src/globals/Math.h \
     src/globals/Meta.h \
-    src/globals/NameFormatter.h \
+    src/file/NameFormatter.h \
     src/network/NetworkReplyWatcher.h \
     src/network/WebsiteCache.h \
     src/globals/Poster.h \
@@ -467,7 +539,9 @@ HEADERS  += Version.h \
     src/ui/main/Message.h \
     src/ui/main/MyIconFont.h \
     src/ui/main/Navbar.h \
+    src/ui/main/QuickOpen.h \
     src/ui/main/Update.h \
+    src/media_centers/kodi/KodiXmlWriter.h \
     src/media_centers/kodi/AlbumXmlReader.h \
     src/media_centers/kodi/AlbumXmlWriter.h \
     src/media_centers/kodi/ArtistXmlReader.h \
@@ -476,28 +550,10 @@ HEADERS  += Version.h \
     src/media_centers/kodi/ConcertXmlWriter.h \
     src/media_centers/kodi/EpisodeXmlWriter.h \
     src/media_centers/kodi/EpisodeXmlReader.h \
-    src/media_centers/kodi/KodiNfoMeta.h \
     src/media_centers/kodi/MovieXmlReader.h \
     src/media_centers/kodi/MovieXmlWriter.h \
     src/media_centers/kodi/TvShowXmlReader.h \
-    src/media_centers/kodi/v16/AlbumXmlWriterV16.h \
-    src/media_centers/kodi/v16/ArtistXmlWriterV16.h \
-    src/media_centers/kodi/v16/ConcertXmlWriterV16.h \
-    src/media_centers/kodi/v16/EpisodeXmlWriterV16.h \
-    src/media_centers/kodi/v16/MovieXmlWriterV16.h \
-    src/media_centers/kodi/v16/TvShowXmlWriterV16.h \
-    src/media_centers/kodi/v17/AlbumXmlWriterV17.h \
-    src/media_centers/kodi/v17/ArtistXmlWriterV17.h \
-    src/media_centers/kodi/v17/ConcertXmlWriterV17.h \
-    src/media_centers/kodi/v17/EpisodeXmlWriterV17.h \
-    src/media_centers/kodi/v17/MovieXmlWriterV17.h \
-    src/media_centers/kodi/v17/TvShowXmlWriterV17.h \
-    src/media_centers/kodi/v18/AlbumXmlWriterV18.h \
-    src/media_centers/kodi/v18/ArtistXmlWriterV18.h \
-    src/media_centers/kodi/v18/ConcertXmlWriterV18.h \
-    src/media_centers/kodi/v18/EpisodeXmlWriterV18.h \
-    src/media_centers/kodi/v18/MovieXmlWriterV18.h \
-    src/media_centers/kodi/v18/TvShowXmlWriterV18.h \
+    src/media_centers/kodi/TvShowXmlWriter.h \
     src/media_centers/KodiVersion.h \
     src/media_centers/KodiVersion.h \
     src/media_centers/KodiXml.h \
@@ -536,26 +592,73 @@ HEADERS  += Version.h \
     src/renamer/Renamer.h \
     src/renamer/RenamerDialog.h \
     src/renamer/RenamerPlaceholders.h \
-    src/scrapers/concert/TMDbConcerts.h \
-    src/scrapers/movie/AdultDvdEmpire.h \
-    src/scrapers/movie/AEBN.h \
-    src/scrapers/movie/CustomMovieScraper.h \
-    src/scrapers/movie/HotMovies.h \
-    src/scrapers/movie/IMDB.h \
+    src/scrapers/tmdb/TmdbApi.h \
+    src/scrapers/concert/tmdb/TmdbConcert.h \
+    src/scrapers/concert/tmdb/TmdbConcertSearchJob.h \
+    src/scrapers/movie/adultdvdempire/AdultDvdEmpire.h \
+    src/scrapers/movie/adultdvdempire/AdultDvdEmpireApi.h \
+    src/scrapers/movie/aebn/AEBN.h \
+    src/scrapers/movie/aebn/AebnApi.h \
+    src/scrapers/movie/custom/CustomMovieScraper.h \
+    src/scrapers/movie/hotmovies/HotMovies.h \
+    src/scrapers/movie/hotmovies/HotMoviesApi.h \
+    src/scrapers/movie/imdb/ImdbMovie.h \
     src/scrapers/movie/imdb/ImdbMovieScraper.h \
-    src/scrapers/movie/OFDb.h \
-    src/scrapers/movie/TMDb.h \
-    src/scrapers/movie/VideoBuster.h \
+    src/scrapers/movie/ofdb/OFDb.h \
+    src/scrapers/movie/ofdb/OfdbApi.h \
+    src/scrapers/movie/tmdb/TmdbMovie.h \
+    src/scrapers/movie/videobuster/VideoBuster.h \
+    src/scrapers/movie/videobuster/VideoBusterApi.h \
     src/scrapers/music/TvTunes.h \
     src/scrapers/music/UniversalMusicScraper.h \
-    src/scrapers/tv_show/TheTvDb.h \
-    src/scrapers/tv_show/thetvdb/ApiRequest.h \
-    src/scrapers/tv_show/thetvdb/Cache.h \
-    src/scrapers/tv_show/thetvdb/EpisodeLoader.h \
-    src/scrapers/tv_show/thetvdb/EpisodeParser.h \
-    src/scrapers/tv_show/thetvdb/Search.h \
-    src/scrapers/tv_show/thetvdb/ShowLoader.h \
-    src/scrapers/tv_show/thetvdb/ShowParser.h \
+    src/scrapers/tv_show/ShowIdentifier.h \
+    src/scrapers/tv_show/EpisodeIdentifier.h \
+    src/scrapers/tv_show/TvScraper.h \
+    src/scrapers/tv_show/EpisodeScrapeJob.h \
+    src/scrapers/tv_show/ShowScrapeJob.h \
+    src/scrapers/tv_show/ShowSearchJob.h \
+    src/scrapers/tv_show/SeasonScrapeJob.h \
+    src/scrapers/tv_show/ShowMerger.h \
+    src/scrapers/tv_show/empty/EmptyTvScraper.h \
+    src/scrapers/tv_show/custom/CustomTvScraper.h \
+    src/scrapers/tv_show/custom/CustomTvScraperConfig.h \
+    src/scrapers/tv_show/custom/CustomSeasonScrapeJob.h \
+    src/scrapers/tv_show/custom/CustomEpisodeScrapeJob.h \
+    src/scrapers/tv_show/custom/CustomShowScrapeJob.h \
+    src/scrapers/tv_show/imdb/ImdbTv.h \
+    src/scrapers/imdb/ImdbApi.h \
+    src/scrapers/tv_show/imdb/ImdbTvEpisodeParser.h \
+    src/scrapers/tv_show/imdb/ImdbTvEpisodeScrapeJob.h \
+    src/scrapers/tv_show/imdb/ImdbTvShowSearchJob.h \
+    src/scrapers/tv_show/imdb/ImdbTvShowParser.h \
+    src/scrapers/tv_show/imdb/ImdbTvShowScrapeJob.h \
+    src/scrapers/tv_show/imdb/ImdbTvSeasonScrapeJob.h \
+    src/scrapers/tv_show/imdb/ImdbTvSeasonParser.h \
+    src/scrapers/tv_show/thetvdb/TheTvDb.h \
+    src/scrapers/tv_show/thetvdb/TheTvDbApi.h \
+    src/scrapers/tv_show/thetvdb/TheTvDbEpisodeScrapeJob.h \
+    src/scrapers/tv_show/thetvdb/TheTvDbEpisodeParser.h \
+    src/scrapers/tv_show/thetvdb/TheTvDbEpisodesParser.h \
+    src/scrapers/tv_show/thetvdb/TheTvDbShowSearchJob.h \
+    src/scrapers/tv_show/thetvdb/TheTvDbShowScrapeJob.h \
+    src/scrapers/tv_show/thetvdb/TheTvDbSeasonScrapeJob.h \
+    src/scrapers/tv_show/thetvdb/TheTvDbShowParser.h \
+    src/scrapers/tv_show/tvmaze/TvMaze.h \
+    src/scrapers/tv_show/tvmaze/TvMazeApi.h \
+    src/scrapers/tv_show/tvmaze/TvMazeEpisodeScrapeJob.h \
+    src/scrapers/tv_show/tvmaze/TvMazeEpisodeParser.h \
+    src/scrapers/tv_show/tvmaze/TvMazeShowSearchJob.h \
+    src/scrapers/tv_show/tvmaze/TvMazeShowScrapeJob.h \
+    src/scrapers/tv_show/tvmaze/TvMazeSeasonScrapeJob.h \
+    src/scrapers/tv_show/tvmaze/TvMazeShowParser.h \
+    src/scrapers/tv_show/tmdb/TmdbTv.h \
+    src/scrapers/tv_show/tmdb/TmdbTvEpisodeScrapeJob.h \
+    src/scrapers/tv_show/tmdb/TmdbTvShowSearchJob.h \
+    src/scrapers/tv_show/tmdb/TmdbTvShowParser.h \
+    src/scrapers/tv_show/tmdb/TmdbTvEpisodeParser.h \
+    src/scrapers/tv_show/tmdb/TmdbTvSeasonParser.h \
+    src/scrapers/tv_show/tmdb/TmdbTvShowScrapeJob.h \
+    src/scrapers/tv_show/tmdb/TmdbTvSeasonScrapeJob.h \
     src/ui/movie_sets/MovieListDialog.h \
     src/ui/movie_sets/SetsWidget.h \
     src/settings/AdvancedSettings.h \
@@ -579,6 +682,7 @@ HEADERS  += Version.h \
     src/ui/settings/NetworkSettingsWidget.h \
     src/ui/settings/ScraperSettingsWidget.h \
     src/ui/settings/TvScraperSettingsWidget.h \
+    src/ui/settings/CustomTvScraperSettingsWidget.h \
     src/ui/settings/TvShowSettingsWidget.h \
     src/ui/small_widgets/AlphabeticalList.h \
     src/ui/small_widgets/Badge.h \
@@ -586,6 +690,7 @@ HEADERS  += Version.h \
     src/ui/small_widgets/FilterWidget.h \
     src/ui/small_widgets/ImageGallery.h \
     src/ui/small_widgets/ImageLabel.h \
+    src/ui/small_widgets/LanguageCombo.h \
     src/ui/small_widgets/LoadingStreamDetails.h \
     src/ui/small_widgets/MediaFlags.h \
     src/ui/small_widgets/MessageLabel.h \
@@ -609,14 +714,15 @@ HEADERS  += Version.h \
     src/ui/support/SupportDialog.h \
     src/scrapers/trailer/HdTrailers.h \
     src/scrapers/trailer/TrailerProvider.h \
+    src/ui/tv_show/TvShowCommonWidgets.h \
     src/ui/tv_show/TvShowMultiScrapeDialog.h \
     src/ui/tv_show/TvShowSearch.h \
-    src/ui/tv_show/TvShowSearchEpisode.h \
     src/ui/tv_show/TvShowWidget.h \
     src/ui/tv_show/TvShowWidgetEpisode.h \
     src/ui/tv_show/TvShowWidgetSeason.h \
     src/ui/tv_show/TvShowWidgetTvShow.h \
     src/ui/tv_show/TvTunesDialog.h \
+    src/tv_shows/EpisodeMap.h \
     src/tv_shows/TvShowModel.h \
     src/tv_shows/TvShowProxyModel.h \
     src/tv_shows/model/TvShowModelItem.h \
@@ -624,18 +730,21 @@ HEADERS  += Version.h \
     src/tv_shows/model/TvShowRootModelItem.h \
     src/tv_shows/model/EpisodeModelItem.h \
     src/tv_shows/model/SeasonModelItem.h \
+    src/ui/tv_show/TvShowSearchWidget.h \
     src/tv_shows/TvShowUpdater.h \
     src/tv_shows/TvShowUtils.h \
     src/ui/media_centers/KodiSync.h \
     src/data/ImdbId.h \
     src/data/TmdbId.h \
     src/tv_shows/TvDbId.h \
+    src/tv_shows/TvMazeId.h \
     src/tv_shows/EpisodeNumber.h \
     src/tv_shows/SeasonNumber.h \
     src/tv_shows/SeasonOrder.h \
     src/data/Certification.h \
     src/movies/MovieCrew.h \
-    src/movies/MovieSet.h
+    src/movies/MovieSet.h \
+    src/scrapers/movie/MovieIdentifier.h
 
 FORMS    += src/ui/main/MainWindow.ui \
     src/ui/concerts/ConcertFilesWidget.ui \
@@ -644,6 +753,7 @@ FORMS    += src/ui/main/MainWindow.ui \
     src/ui/concerts/ConcertStreamDetailsWidget.ui \
     src/ui/concerts/ConcertWidget.ui \
     src/ui/concerts/ConcertInfoWidget.ui \
+    src/ui/export/CsvExportDialog.ui \
     src/ui/imports/DownloadsWidget.ui \
     src/ui/imports/ImportActions.ui \
     src/ui/imports/ImportDialog.ui \
@@ -691,6 +801,7 @@ FORMS    += src/ui/main/MainWindow.ui \
     src/ui/settings/NetworkSettingsWidget.ui \
     src/ui/settings/ScraperSettingsWidget.ui \
     src/ui/settings/TvScraperSettingsWidget.ui \
+    src/ui/settings/CustomTvScraperSettingsWidget.ui \
     src/ui/settings/TvShowSettingsWidget.ui \
     src/ui/small_widgets/FilterWidget.ui \
     src/ui/small_widgets/ImageLabel.ui \
@@ -702,7 +813,7 @@ FORMS    += src/ui/main/MainWindow.ui \
     src/tv_shows/ItemWidgetShow.ui \
     src/ui/tv_show/TvShowMultiScrapeDialog.ui \
     src/ui/tv_show/TvShowSearch.ui \
-    src/ui/tv_show/TvShowSearchEpisode.ui \
+    src/ui/tv_show/TvShowSearchWidget.ui \
     src/ui/tv_show/TvShowWidget.ui \
     src/ui/tv_show/TvShowWidgetEpisode.ui \
     src/ui/tv_show/TvShowWidgetSeason.ui \
@@ -712,7 +823,6 @@ FORMS    += src/ui/main/MainWindow.ui \
 
 RESOURCES += \
     data/MediaElch.qrc \
-    data/i18n.qrc \
     ui.qrc
 
 TRANSLATIONS += \
@@ -721,7 +831,9 @@ TRANSLATIONS += \
     data/i18n/MediaElch_da.ts \
     data/i18n/MediaElch_de.ts \
     data/i18n/MediaElch_en.ts \
-    data/i18n/MediaElch_en_US.ts \
+    # See https://github.com/Komet/MediaElch/issues/1191#issuecomment-789104632
+    # Locale resolution is stupid...
+    # data/i18n/MediaElch_en_US.ts \
     data/i18n/MediaElch_es_ES.ts \
     data/i18n/MediaElch_fi.ts \
     data/i18n/MediaElch_fr.ts \

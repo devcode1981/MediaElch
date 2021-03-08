@@ -8,7 +8,7 @@ MakeMkvCon::MakeMkvCon(ImportSettings& settings, QObject* parent) : QObject(pare
 
 MakeMkvCon::~MakeMkvCon()
 {
-    for (QProcess* process : m_processes) {
+    for (QProcess* process : asConst(m_processes)) {
         process->kill();
     }
 }
@@ -23,7 +23,7 @@ void MakeMkvCon::onGetDrives()
                << "info"
                << "disc:9999";
 
-    auto process = new QProcess(this);
+    auto* process = new QProcess(this);
     m_processes.append(process);
     connect(process, &QProcess::readyReadStandardOutput, this, &MakeMkvCon::onReadyRead);
     connect(process, &QProcess::readyReadStandardError, this, &MakeMkvCon::onReadyReadError);
@@ -42,7 +42,7 @@ void MakeMkvCon::onScanDrive(int id)
     parameters << "-r"
                << "info" << QString("disc:%1").arg(id);
 
-    auto process = new QProcess(this);
+    auto* process = new QProcess(this);
     m_processes.append(process);
     connect(process, &QProcess::readyReadStandardOutput, this, &MakeMkvCon::onReadyRead);
     connect(process, &QProcess::readyReadStandardError, this, &MakeMkvCon::onReadyReadError);
@@ -59,7 +59,7 @@ void MakeMkvCon::onImportTrack(int trackId, int driveId, QString importFolder)
                << "--progress=-stdout"
                << "mkv" << QString("disc:%1").arg(driveId) << QString("%1").arg(trackId) << importFolder;
 
-    auto process = new QProcess(this);
+    auto* process = new QProcess(this);
     m_processes.append(process);
     connect(process, &QProcess::readyReadStandardOutput, this, &MakeMkvCon::onReadyRead);
     connect(process, &QProcess::readyReadStandardError, this, &MakeMkvCon::onReadyReadError);
@@ -77,7 +77,7 @@ void MakeMkvCon::onBackupDisc(int driveId, QString importFolder)
                << "--progress=-stdout"
                << "backup" << QString("disc:%1").arg(driveId) << importFolder;
 
-    auto process = new QProcess(this);
+    auto* process = new QProcess(this);
     m_processes.append(process);
     connect(process, &QProcess::readyReadStandardOutput, this, &MakeMkvCon::onReadyRead);
     connect(process, &QProcess::readyReadStandardError, this, &MakeMkvCon::onReadyReadError);
@@ -99,7 +99,7 @@ void MakeMkvCon::onReadyRead()
     }
 
     QString job = process->property("job").toString();
-    for (const QString& line : lines) {
+    for (const QString& line : asConst(lines)) {
         parseMsg(line);
         if (job == "scanDrives") {
             parseScanDrive(line);
@@ -137,29 +137,31 @@ void MakeMkvCon::onFinished(int exitCode, QProcess::ExitStatus status)
 
 void MakeMkvCon::parseMsg(QString line)
 {
-    QRegExp rx("MSG:(\\d+),\\d+,\\d+,\"(.*)\",\".*\"");
-    rx.setMinimal(true);
-    if (rx.indexIn(line) != -1 && rx.cap(1).toInt() != 5010) {
-        emit sigMessage(rx.cap(2).replace("\\\"", "\""));
+    QRegularExpression rx("MSG:(\\d+),\\d+,\\d+,\"(.*)\",\".*\"", QRegularExpression::InvertedGreedinessOption);
+    QRegularExpressionMatch match = rx.match(line);
+    if (match.hasMatch() && match.captured(1).toInt() != 5010) {
+        emit sigMessage(match.captured(2).replace("\\\"", "\""));
     }
 }
 
 void MakeMkvCon::parseScanDrive(QString line)
 {
-    QRegExp rx(R"lit(DRV:(\d+),\d+,\d+,\d+,"(.*)","(.*)",".*")lit");
-    rx.setMinimal(true);
-    if (rx.indexIn(line) != -1 && !rx.cap(2).isEmpty()) {
-        m_drives.insert(rx.cap(1).toInt(), QString("%1 (%2)").arg(rx.cap(2)).arg(rx.cap(3)));
+    QRegularExpression rx(R"lit(DRV:(\d+),\d+,\d+,\d+,"(.*)","(.*)",".*")lit", //
+        QRegularExpression::InvertedGreedinessOption);
+    QRegularExpressionMatch match = rx.match(line);
+    if (match.hasMatch() && !match.captured(2).isEmpty()) {
+        m_drives.insert(match.captured(1).toInt(), QString("%1 (%2)").arg(match.captured(2)).arg(match.captured(3)));
     }
 }
 
 void MakeMkvCon::parseInfo(QString line)
 {
-    QRegExp rx("TINFO:(\\d+),(\\d+),\\d+,\"(.*)\"");
-    if (rx.indexIn(line) != -1) {
-        int trackId = rx.cap(1).toInt();
-        int typeId = rx.cap(2).toInt();
-        QString value = rx.cap(3);
+    QRegularExpression rx("TINFO:(\\d+),(\\d+),\\d+,\"(.*)\"", QRegularExpression::InvertedGreedinessOption);
+    QRegularExpressionMatch match = rx.match(line);
+    if (match.hasMatch()) {
+        int trackId = match.captured(1).toInt();
+        int typeId = match.captured(2).toInt();
+        QString value = match.captured(3);
         if (!m_tracks.contains(trackId)) {
             Track t;
             m_tracks.insert(trackId, t);
@@ -175,16 +177,17 @@ void MakeMkvCon::parseInfo(QString line)
     }
 
     rx.setPattern("CINFO:(\\d+),\\d+,\"(.*)\"");
-    if (rx.indexIn(line) != -1 && rx.cap(1).toInt() == 2) {
-        m_title = rx.cap(2);
+    match = rx.match(line);
+    if (match.hasMatch() && match.captured(1).toInt() == 2) {
+        m_title = match.captured(2);
     }
 }
 
 void MakeMkvCon::parseProgress(QString line)
 {
-    QRegExp rx(R"(^PRGV:(\d+),(\d+),(\d+)$)");
-    rx.setMinimal(true);
-    if (rx.indexIn(line) != -1) {
-        emit sigProgress(rx.cap(2).toInt(), rx.cap(3).toInt());
+    QRegularExpression rx(R"(^PRGV:(\d+),(\d+),(\d+)$)", QRegularExpression::InvertedGreedinessOption);
+    QRegularExpressionMatch match = rx.match(line);
+    if (match.hasMatch()) {
+        emit sigProgress(match.captured(2).toInt(), match.captured(3).toInt());
     }
 }

@@ -2,10 +2,10 @@
 
 #include <QDebug>
 #include <QFileInfo>
-#include <QRegExp>
 #include <QStringList>
 #include <utility>
 
+#include "file/FilenameUtils.h"
 #include "globals/Globals.h"
 #include "globals/Helper.h"
 
@@ -51,7 +51,9 @@ QString DataFile::saveFileName(const QString& fileName, SeasonNumber season, boo
 {
     if (type() == DataFileType::MovieSetBackdrop || type() == DataFileType::MovieSetPoster) {
         QString newFileName = m_fileName;
-        return helper::sanitizeFileName(newFileName.replace("<setName>", fileName));
+        newFileName.replace("<setName>", fileName);
+        helper::sanitizeFileName(newFileName);
+        return newFileName;
     }
 
     QFileInfo fi(fileName);
@@ -59,7 +61,7 @@ QString DataFile::saveFileName(const QString& fileName, SeasonNumber season, boo
 
     QString baseName = fi.completeBaseName();
     if (stacked) {
-        baseName = helper::stackedBaseName(fileName);
+        baseName = mediaelch::file::stackedBaseName(fileName);
     }
     newFileName.replace("<baseFileName>", baseName);
 

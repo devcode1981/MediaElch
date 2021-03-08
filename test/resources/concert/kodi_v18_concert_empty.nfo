@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <musicvideo>
     <title></title>
+    <originaltitle></originaltitle>
     <artist></artist>
     <album></album>
     <id></id>
-    <uniqueid default="true" type="imdb"></uniqueid>
+    <uniqueid type="imdb" default="true"></uniqueid>
     <ratings/>
     <userrating>0</userrating>
     <year></year>
     <plot></plot>
-    <outline></outline>
     <tagline></tagline>
     <mpaa></mpaa>
     <playcount>0</playcount>

@@ -197,7 +197,7 @@ void ConcertWidget::concertNameChanged(QString text)
 void ConcertWidget::setEnabledTrue(Concert* concert)
 {
     if (concert != nullptr) {
-        qDebug() << concert->name();
+        qDebug() << concert->title();
     }
     if ((concert != nullptr) && concert->controller()->downloadsInProgress()) {
         qDebug() << "Downloads are in progress";
@@ -224,7 +224,7 @@ void ConcertWidget::setDisabledTrue()
  */
 void ConcertWidget::setConcert(Concert* concert)
 {
-    qDebug() << "Entered, concert=" << concert->name();
+    qDebug() << "Entered, concert=" << concert->title();
     concert->controller()->loadData(Manager::instance()->mediaCenterInterfaceConcert());
     m_concert = concert;
     if (!concert->streamDetailsLoaded() && Settings::instance()->autoLoadStreamDetails()) {
@@ -270,14 +270,13 @@ void ConcertWidget::onStartScraperSearch()
     emit setActionSaveEnabled(false, MainWidgets::Concerts);
 
     auto* searchWidget = new ConcertSearch(this);
-    searchWidget->execWithSearch(m_concert->name());
+    searchWidget->execWithSearch(m_concert->title());
 
     if (searchWidget->result() == QDialog::Accepted) {
         setDisabledTrue();
-        searchWidget->scraperId();
-        m_concert->controller()->loadData(searchWidget->scraperId(),
-            Manager::instance()->scrapers().concertScrapers().at(searchWidget->scraperNo()),
-            searchWidget->infosToLoad());
+        // TODO: Not only TmdbId
+        m_concert->controller()->loadData(
+            TmdbId(searchWidget->concertIdentifier()), searchWidget->scraper(), searchWidget->infosToLoad());
         searchWidget->deleteLater();
 
     } else {
@@ -322,7 +321,7 @@ void ConcertWidget::onLoadingImages(Concert* concert, QVector<ImageType> imageTy
     }
 
     for (const auto imageType : imageTypes) {
-        for (auto cImage : ui->artStackedWidget->findChildren<ClosableImage*>()) {
+        for (auto* cImage : ui->artStackedWidget->findChildren<ClosableImage*>()) {
             if (cImage->imageType() == imageType) {
                 cImage->setLoading(true);
             }
@@ -346,7 +345,7 @@ void ConcertWidget::onSetImage(Concert* concert, ImageType type, QByteArray imag
         return;
     }
 
-    for (auto image : ui->artStackedWidget->findChildren<ClosableImage*>()) {
+    for (auto* image : ui->artStackedWidget->findChildren<ClosableImage*>()) {
         if (image->imageType() == type) {
             image->setLoading(false);
             image->setImage(imageData);
@@ -378,7 +377,7 @@ void ConcertWidget::updateConcertInfo()
     ui->concertInfo->updateConcertInfo();
     ui->concertStreamdetails->updateConcertInfo();
 
-    ui->concertName->setText(m_concert->name());
+    ui->concertName->setText(m_concert->title());
 
     QStringList genres;
     QStringList tags;
@@ -410,7 +409,7 @@ void ConcertWidget::updateConcertInfo()
 void ConcertWidget::updateImages(QVector<ImageType> images)
 {
     for (const auto imageType : images) {
-        for (auto cImage : ui->artStackedWidget->findChildren<ClosableImage*>()) {
+        for (auto* cImage : ui->artStackedWidget->findChildren<ClosableImage*>()) {
             if (cImage->imageType() == imageType) {
                 updateImage(imageType, cImage);
                 break;
@@ -449,7 +448,7 @@ void ConcertWidget::onSaveInformation()
         m_concert->controller()->saveData(Manager::instance()->mediaCenterInterfaceConcert());
         m_concert->controller()->loadData(Manager::instance()->mediaCenterInterfaceConcert(), true);
         updateConcertInfo();
-        NotificationBox::instance()->showSuccess(tr("<b>\"%1\"</b> Saved").arg(m_concert->name()));
+        NotificationBox::instance()->showSuccess(tr("<b>\"%1\"</b> Saved").arg(m_concert->title()));
     } else {
         for (Concert* concert : concerts) {
             if (concert->hasChanged()) {
@@ -593,12 +592,11 @@ void ConcertWidget::onAddExtraFanart()
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(ImageType::ConcertExtraFanart);
-    imageDialog->clear();
     imageDialog->setMultiSelection(true);
     imageDialog->setConcert(m_concert);
-    imageDialog->setDownloads(m_concert->backdrops());
+    imageDialog->setDefaultDownloads(m_concert->backdrops());
 
-    imageDialog->exec(ImageType::ConcertBackdrop);
+    imageDialog->execWithType(ImageType::ConcertBackdrop);
     const int exitCode = imageDialog->result();
     const QVector<QUrl> imageUrls = imageDialog->imageUrls();
     imageDialog->deleteLater();
@@ -628,24 +626,21 @@ void ConcertWidget::onChooseImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(image->imageType());
-    imageDialog->clear();
     imageDialog->setConcert(m_concert);
     if (image->imageType() == ImageType::ConcertPoster) {
-        imageDialog->setDownloads(m_concert->posters());
+        imageDialog->setDefaultDownloads(m_concert->posters());
     } else if (image->imageType() == ImageType::ConcertBackdrop) {
-        imageDialog->setDownloads(m_concert->backdrops());
-    } else {
-        imageDialog->setDownloads(QVector<Poster>());
+        imageDialog->setDefaultDownloads(m_concert->backdrops());
     }
 
-    imageDialog->exec(image->imageType());
+    imageDialog->execWithType(image->imageType());
     const int exitCode = imageDialog->result();
     const QUrl imageUrl = imageDialog->imageUrl();
     imageDialog->deleteLater();
@@ -663,7 +658,7 @@ void ConcertWidget::onDeleteImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }

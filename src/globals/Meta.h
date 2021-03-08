@@ -5,9 +5,31 @@
 #define ELCH_NODISCARD Q_REQUIRED_RESULT
 #define ELCH_DEPRECATED Q_DECL_DEPRECATED
 
+/// \brief Registers some common types using qRegisterMetaType
+/// \details Qt's queued connections require that types are registered using
+///          qRegisterMetaType.  Q_DECLARE_METATYPE is not enough.
+///          To avoid registering these types multiple times, this function is
+///          called once on startup.
+void registerAllMetaTypes();
+
+// Partially from qt/QtCore/qglobal.h
+// qAsConst was introduced in Qt 5.7, we support 5.6
+// std::as_const was introduced in C++17, we support C++14
+
+/// \brief Adds const to non-const objects (like std::as_const)
+template<typename T>
+constexpr typename std::add_const<T>::type& asConst(T& t) noexcept
+{
+    return t;
+}
+// prevent rvalue arguments:
+template<typename T>
+void asConst(const T&&) = delete;
+
+
 // Partially copied from Qt: qtbase/src/corelib/global/qglobal.h
 // Qt 5.5 does not support Overload so we have to provide it ourselves.
-// This code can be removed when Qt 5.6 is required.
+// This code can be removed when Qt 5.7 is required.
 //
 // Copyright (C) 2019 The Qt Company Ltd.
 // Modified to avoid name clashes.

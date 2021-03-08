@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -Eeuo pipefail
 IFS=$'\n\t'
 
 ###############################################################################
@@ -8,14 +8,16 @@ IFS=$'\n\t'
 # If you develop for this project, please use `make cmake-format`.
 ###############################################################################
 
-cd "$(dirname "$0")/.."
+# Go to project directory
+cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null 2>&1
+
 source scripts/utils.sh
 
 print_important "Run cmake-format on all CMake files"
 
 find . ! -path "./build/*" ! -path "./third_party/*" \
-    -type f \( -name "*.cmake" -o -name "CMakeLists.txt" \) \
-    -exec cmake-format -c .cmake-format -i {} \+
+	-type f \( -name "*.cmake" -o -name "CMakeLists.txt" \) \
+	-exec cmake-format -c .cmake-format -i {} \+
 
 cmake-format -c .cmake-format -i third_party/CMakeLists.txt
 

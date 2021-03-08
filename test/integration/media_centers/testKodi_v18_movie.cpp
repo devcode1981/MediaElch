@@ -2,7 +2,7 @@
 
 #include "media_centers/KodiXml.h"
 #include "media_centers/kodi/MovieXmlReader.h"
-#include "media_centers/kodi/v18/MovieXmlWriterV18.h"
+#include "media_centers/kodi/MovieXmlWriter.h"
 #include "test/integration/resource_dir.h"
 
 #include <QDateTime>
@@ -29,8 +29,8 @@ static void createAndCompareMovie(const QString& filename, Callback callback)
 
     callback(movie);
 
-    mediaelch::kodi::MovieXmlWriterV18 writer(movie);
-    QString actual = writer.getMovieXml().trimmed();
+    mediaelch::kodi::MovieXmlWriterGeneric writer(mediaelch::KodiVersion(18), movie);
+    QString actual = writer.getMovieXml(true).trimmed();
     writeTempFile(filename, actual);
     checkSameXml(movieContent, actual);
 }
@@ -43,8 +43,8 @@ TEST_CASE("Movie XML writer for Kodi v18", "[data][movie][kodi][nfo]")
         QString filename = "movie/kodi_v18_movie_empty.nfo";
         CAPTURE(filename);
 
-        mediaelch::kodi::MovieXmlWriterV18 writer(movie);
-        QString actual = writer.getMovieXml().trimmed();
+        mediaelch::kodi::MovieXmlWriterGeneric writer(mediaelch::KodiVersion(18), movie);
+        QString actual = writer.getMovieXml(true).trimmed();
         writeTempFile(filename, actual);
         checkSameXml(getFileContent(filename), actual);
     }
@@ -99,7 +99,7 @@ TEST_CASE("Movie XML writer for Kodi v18", "[data][movie][kodi][nfo]")
         // - art
 
         movie.setName("Allegiant");
-        movie.setOriginalName("Allegiant");
+        movie.setOriginalName("AllegiantOriginal");
         movie.setSortTitle("TmovieFc10");
 
         {
@@ -141,7 +141,7 @@ TEST_CASE("Movie XML writer for Kodi v18", "[data][movie][kodi][nfo]")
         movie.setLastPlayed(QDateTime::fromString("2017-09-06 12:44:12", Qt::ISODate));
         movie.setFiles(mediaelch::FileList({R"(F:\Movies- Test - Scraped\Allegiant (2016)\BDMV\index.bdmv)"}));
         // TODO: basepath
-        movie.setId(ImdbId("tt3410834"));
+        movie.setImdbId(ImdbId("tt3410834"));
         movie.addGenre("Adventure");
         movie.addGenre("Science Fiction");
         movie.addCountry("United States of America");
@@ -191,9 +191,9 @@ TEST_CASE("Movie XML writer for Kodi v18", "[data][movie][kodi][nfo]")
         // TODO: order
         movie.addActor(actor);
 
-        mediaelch::kodi::MovieXmlWriterV18 writer(movie);
+        mediaelch::kodi::MovieXmlWriterGeneric writer(mediaelch::KodiVersion(18), movie);
 
-        QString actual = writer.getMovieXml().trimmed();
+        QString actual = writer.getMovieXml(true).trimmed();
         QString filename = "movie/kodi_v18_movie_all.nfo";
         CAPTURE(filename);
         writeTempFile(filename, actual);

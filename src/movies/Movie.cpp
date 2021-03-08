@@ -1,5 +1,4 @@
 #include "Movie.h"
-#include "globals/NameFormatter.h"
 
 #include <QApplication>
 #include <QDebug>
@@ -23,14 +22,7 @@ Movie::Movie(QStringList files, QObject* parent) :
     m_controller{new MovieController(this)},
     m_movieImages(*this),
     m_runtime{0min},
-    m_playcount{0},
-    m_databaseId{-1},
-    m_mediaCenterId{-1},
-    m_hasChanged{false},
-    m_inSeparateFolder{false},
-    m_syncNeeded{false},
-    m_streamDetailsLoaded{false},
-    m_hasDuplicates{false},
+
     m_streamDetails{nullptr},
     m_discType{DiscType::Single},
     m_label{ColorLabel::NoLabel}
@@ -46,7 +38,7 @@ void Movie::setFiles(const mediaelch::FileList& files)
 {
     if (!files.isEmpty()) {
         QFileInfo fi(files.first().toString());
-        QStringList path = fi.path().split("/", QString::SkipEmptyParts);
+        QStringList path = fi.path().split("/", ElchSplitBehavior::SkipEmptyParts);
         if (!path.isEmpty()) {
             m_folderName = path.last();
         }
@@ -698,12 +690,7 @@ void Movie::setLastPlayed(QDateTime lastPlayed)
     setChanged(true);
 }
 
-/**
- * \brief Sets the id of the movie
- * \param id Id of the movie
- * \see Movie::id
- */
-void Movie::setId(ImdbId id)
+void Movie::setImdbId(ImdbId id)
 {
     m_imdbId = std::move(id);
     setChanged(true);
@@ -967,9 +954,17 @@ bool Movie::hasLocalTrailer() const
         return false;
     }
     QFileInfo fi(files().first().toString());
-    QString trailerFilter = QStringLiteral("%1*-trailer*").arg(fi.completeBaseName());
+    const QString baseName = fi.completeBaseName();
+    // Do NOT make the filename part of the name filter.
+    // Otherwise filenames like `Movie[BLURAY].mov` will turn into wildcard glob
+    // patterns (everything in the square brackets becomes "OR character").
+    QString trailerFilter = QStringLiteral("*-trailer*");
     QDir dir(fi.canonicalPath());
-    return !dir.entryList({trailerFilter}).isEmpty();
+    const QStringList entries = dir.entryList({trailerFilter});
+    const auto found = std::find_if(entries.cbegin(), entries.cend(), [&baseName](const QString& entry) { //
+        return entry.startsWith(baseName);
+    });
+    return found != entries.cend();
 }
 
 QString Movie::localTrailerFileName() const
@@ -1097,13 +1092,13 @@ ColorLabel Movie::label() const
     return m_label;
 }
 
-bool Movie::isDuplicate(Movie* movie)
+bool Movie::isDuplicate(Movie* movie) const
 {
     MovieDuplicate md = duplicateProperties(movie);
     return md.imdbId || md.tmdbId || md.title;
 }
 
-MovieDuplicate Movie::duplicateProperties(Movie* movie)
+MovieDuplicate Movie::duplicateProperties(Movie* movie) const
 {
     MovieDuplicate md;
     md.imdbId = movie->imdbId().isValid() && movie->imdbId() == imdbId();

@@ -14,10 +14,12 @@
 #include "globals/Manager.h"
 #include "globals/MessageIds.h"
 #include "globals/ScraperInfos.h"
-#include "scrapers/tv_show/TheTvDb.h"
+#include "scrapers/tv_show/thetvdb/TheTvDb.h"
 #include "ui/notifications/NotificationBox.h"
 #include "ui/tv_show/TvShowSearch.h"
 #include "ui/tv_show/TvTunesDialog.h"
+
+using namespace mediaelch;
 
 TvShowWidgetTvShow::TvShowWidgetTvShow(QWidget* parent) :
     QWidget(parent), ui(new Ui::TvShowWidgetTvShow), m_show{nullptr}
@@ -111,13 +113,14 @@ TvShowWidgetTvShow::TvShowWidgetTvShow(QWidget* parent) :
     helper::setDevicePixelRatio(pixmap, helper::devicePixelRatio(this));
     ui->actor->setPixmap(pixmap);
 
-    connect(ui->name, &QLineEdit::textChanged, ui->showTitle, &QLabel::setText);
+    connect(ui->title, &QLineEdit::textChanged, ui->showTitle, &QLabel::setText);
     connect(ui->buttonAddActor, &QAbstractButton::clicked, this, &TvShowWidgetTvShow::onAddActor);
     connect(ui->buttonRemoveActor, &QAbstractButton::clicked, this, &TvShowWidgetTvShow::onRemoveActor);
     connect(m_posterDownloadManager,
         &DownloadManager::sigDownloadFinished,
         this,
-        &TvShowWidgetTvShow::onPosterDownloadFinished);
+        &TvShowWidgetTvShow::onPosterDownloadFinished,
+        static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
     connect(m_posterDownloadManager, &DownloadManager::showDownloadsLeft, this, &TvShowWidgetTvShow::onDownloadsLeft);
     connect(ui->actors, &QTableWidget::itemSelectionChanged, this, &TvShowWidgetTvShow::onActorChanged);
     connect(ui->actor, &MyLabel::clicked, this, &TvShowWidgetTvShow::onChangeActorImage);
@@ -139,11 +142,13 @@ TvShowWidgetTvShow::TvShowWidgetTvShow(QWidget* parent) :
 
     // Connect GUI change events to movie object
     // clang-format off
-    connect(ui->name,          &QLineEdit::textEdited,           this, &TvShowWidgetTvShow::onNameChange);
+    connect(ui->title,         &QLineEdit::textEdited,           this, &TvShowWidgetTvShow::onTitleChange);
     connect(ui->imdbId,        &QLineEdit::textEdited,           this, &TvShowWidgetTvShow::onImdbIdChange);
     connect(ui->tmdbId,        &QLineEdit::textEdited,           this, &TvShowWidgetTvShow::onTmdbIdChange);
     connect(ui->tvdbId,        &QLineEdit::textEdited,           this, &TvShowWidgetTvShow::onTvdbIdChange);
+    connect(ui->tvmazeId,      &QLineEdit::textEdited,           this, &TvShowWidgetTvShow::onTvMazeIdChange);
     connect(ui->sortTitle,     &QLineEdit::textEdited,           this, &TvShowWidgetTvShow::onSortTitleChange);
+    connect(ui->originalTitle, &QLineEdit::textEdited,           this, &TvShowWidgetTvShow::onOriginalTitleChange);
     connect(ui->certification, &QComboBox::editTextChanged,      this, &TvShowWidgetTvShow::onCertificationChange);
     connect(ui->rating,        elchOverload<double>(&QDoubleSpinBox::valueChanged), this, &TvShowWidgetTvShow::onRatingChange);
     connect(ui->userRating,    elchOverload<double>(&QDoubleSpinBox::valueChanged), this, &TvShowWidgetTvShow::onUserRatingChange);
@@ -163,11 +168,6 @@ TvShowWidgetTvShow::TvShowWidgetTvShow(QWidget* parent) :
     ui->userRating->setMinimum(0.0);
 
     onSetEnabled(false);
-
-    connect(dynamic_cast<TheTvDb*>(Manager::instance()->scrapers().tvScrapers().at(0)),
-        &TheTvDb::sigLoadProgress,
-        this,
-        &TvShowWidgetTvShow::onShowScraperProgress);
 
     QPainter p;
     QPixmap revert(":/img/arrow_circle_left.png");
@@ -217,7 +217,7 @@ void TvShowWidgetTvShow::setBigWindow(bool bigWindow)
  */
 void TvShowWidgetTvShow::onClear()
 {
-    bool blocked;
+    bool blocked = false;
 
     blocked = ui->certification->blockSignals(true);
     ui->certification->clear();
@@ -259,10 +259,12 @@ void TvShowWidgetTvShow::onClear()
     ui->imdbId->clear();
     ui->tmdbId->clear();
     ui->tvdbId->clear();
+    ui->tvmazeId->clear();
     ui->actors->setRowCount(0);
     ui->dir->clear();
-    ui->name->clear();
+    ui->title->clear();
     ui->sortTitle->clear();
+    ui->originalTitle->clear();
     ui->studio->clear();
     ui->genreCloud->clear();
     ui->fanarts->clear();
@@ -332,11 +334,13 @@ void TvShowWidgetTvShow::updateTvShowInfo()
     onClear();
 
     ui->dir->setText(m_show->dir().toNativePathString());
-    ui->name->setText(m_show->title());
+    ui->title->setText(m_show->title());
+    ui->originalTitle->setText(m_show->originalTitle());
+    ui->sortTitle->setText(m_show->sortTitle());
     ui->imdbId->setText(m_show->imdbId().toString());
     ui->tmdbId->setText(m_show->tmdbId().toString());
     ui->tvdbId->setText(m_show->tvdbId().toString());
-    ui->sortTitle->setText(m_show->sortTitle());
+    ui->tvmazeId->setText(m_show->tvmazeId().toString());
     // TODO: multiple ratings
     if (!m_show->ratings().isEmpty()) {
         ui->rating->setValue(m_show->ratings().back().rating);
@@ -469,32 +473,42 @@ void TvShowWidgetTvShow::onRevertChanges()
 void TvShowWidgetTvShow::onStartScraperSearch()
 {
     if (m_show == nullptr) {
-        qDebug() << "My show is invalid";
+        qCritical() << "[TvShowWidgetTvShow] Cannot start show search without valid show! This must not happen!";
         return;
     }
+
     emit sigSetActionSaveEnabled(false, MainWidgets::TvShows);
     emit sigSetActionSearchEnabled(false, MainWidgets::TvShows);
-    TvShowSearch::instance()->setSearchType(TvShowType::TvShow);
-    TvShowSearch::instance()->exec(m_show->title(), m_show->tvdbId());
-    if (TvShowSearch::instance()->result() == QDialog::Accepted) {
-        int id = NotificationBox::instance()->addProgressBar(tr("Please wait while your TV show is scraped"));
-        m_show->setProperty("progressBarId", id);
+
+    auto* searchWidget = new TvShowSearch(this);
+    searchWidget->setSearchType(TvShowType::TvShow);
+    searchWidget->execWithSearch(m_show->title());
+
+    const int result = searchWidget->result();
+    const mediaelch::scraper::ShowIdentifier identifier(searchWidget->showIdentifier());
+    const auto updateType = searchWidget->updateType();
+    const auto showInfosToLoad = searchWidget->showDetailsToLoad();
+    const auto episodeInfosToLoad = searchWidget->episodeDetailsToLoad();
+    const Locale locale = searchWidget->locale();
+    const SeasonOrder seasonOrder = searchWidget->seasonOrder();
+    scraper::TvScraper* scraper = searchWidget->scraper();
+
+    searchWidget->deleteLater();
+
+    if (result == QDialog::Accepted) {
+        const int boxId = NotificationBox::instance()->addProgressBar(tr("Please wait while your TV show is scraped"));
+        m_show->setProperty("progressBarId", boxId);
         onSetEnabled(false);
-        m_show->loadData(TvShowSearch::instance()->scraperId(),
-            Manager::instance()->scrapers().tvScrapers().at(0),
-            TvShowSearch::instance()->updateType(),
-            TvShowSearch::instance()->infosToLoad());
         connect(m_show.data(), &TvShow::sigLoaded, this, &TvShowWidgetTvShow::onInfoLoadDone, Qt::UniqueConnection);
+        m_show->scrapeData(scraper, identifier, locale, seasonOrder, updateType, showInfosToLoad, episodeInfosToLoad);
+
     } else {
         emit sigSetActionSearchEnabled(true, MainWidgets::TvShows);
         emit sigSetActionSaveEnabled(true, MainWidgets::TvShows);
     }
 }
 
-/**
- * \brief TvShowWidgetTvShow::onInfoLoadDone
- */
-void TvShowWidgetTvShow::onInfoLoadDone(TvShow* show, QSet<ShowScraperInfo> details)
+void TvShowWidgetTvShow::onInfoLoadDone(TvShow* show, QSet<ShowScraperInfo> details, Locale locale)
 {
     if (show->showMissingEpisodes()) {
         show->clearMissingEpisodes();
@@ -508,9 +522,9 @@ void TvShowWidgetTvShow::onInfoLoadDone(TvShow* show, QSet<ShowScraperInfo> deta
         ImageType::TvShowSeasonThumb};
 
     if (show->tvdbId().isValid() && !types.isEmpty() && details.contains(ShowScraperInfo::ExtraArts)) {
-        Manager::instance()->fanartTv()->tvShowImages(show, show->tvdbId(), types);
+        Manager::instance()->fanartTv()->tvShowImages(show, show->tvdbId(), types, locale);
         connect(Manager::instance()->fanartTv(),
-            &ImageProviderInterface::sigTvShowImagesLoaded,
+            &mediaelch::scraper::ImageProvider::sigTvShowImagesLoaded,
             this,
             &TvShowWidgetTvShow::onLoadDone,
             Qt::UniqueConnection);
@@ -690,7 +704,7 @@ void TvShowWidgetTvShow::onLoadDone(TvShow* show, QMap<ImageType, QVector<Poster
         }
     }
 
-    if (show->infosToLoad().contains(ShowScraperInfo::Thumbnail)) {
+    if (show->episodeInfosToLoad().contains(EpisodeScraperInfo::Thumbnail)) {
         for (TvShowEpisode* episode : show->episodes()) {
             if (episode->thumbnail().isEmpty() || !episode->hasChanged()) {
                 continue;
@@ -713,7 +727,7 @@ void TvShowWidgetTvShow::onLoadDone(TvShow* show, QMap<ImageType, QVector<Poster
             &DownloadManager::allTvShowDownloadsFinished,
             this,
             &TvShowWidgetTvShow::onDownloadsFinished,
-            Qt::UniqueConnection);
+            static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
     } else if (show == m_show) {
         onSetEnabled(true);
         emit sigSetActionSearchEnabled(true, MainWidgets::TvShows);
@@ -846,7 +860,7 @@ void TvShowWidgetTvShow::onRemoveTag(QString tag)
  */
 void TvShowWidgetTvShow::onActorEdited(QTableWidgetItem* item)
 {
-    auto actor = ui->actors->item(item->row(), 1)->data(Qt::UserRole).value<Actor*>();
+    auto* actor = ui->actors->item(item->row(), 1)->data(Qt::UserRole).value<Actor*>();
     if (item->column() == 0) {
         actor->name = item->text();
     } else if (item->column() == 1) {
@@ -889,7 +903,7 @@ void TvShowWidgetTvShow::onRemoveActor()
         return;
     }
 
-    auto actor = ui->actors->item(row, 1)->data(Qt::UserRole).value<Actor*>();
+    auto* actor = ui->actors->item(row, 1)->data(Qt::UserRole).value<Actor*>();
     m_show->removeActor(actor);
     ui->actors->blockSignals(true);
     ui->actors->removeRow(row);
@@ -911,7 +925,7 @@ void TvShowWidgetTvShow::onActorChanged()
         return;
     }
 
-    auto actor = ui->actors->item(ui->actors->currentRow(), 1)->data(Qt::UserRole).value<Actor*>();
+    auto* actor = ui->actors->item(ui->actors->currentRow(), 1)->data(Qt::UserRole).value<Actor*>();
     if (!actor->image.isNull()) {
         QImage img = QImage::fromData(actor->image);
         ui->actorResolution->setText(QString("%1 x %2").arg(img.width()).arg(img.height()));
@@ -951,7 +965,7 @@ void TvShowWidgetTvShow::onChangeActorImage()
             QByteArray ba;
             QBuffer buffer(&ba);
             img.save(&buffer, "jpg", 100);
-            auto actor = ui->actors->item(ui->actors->currentRow(), 1)->data(Qt::UserRole).value<Actor*>();
+            auto* actor = ui->actors->item(ui->actors->currentRow(), 1)->data(Qt::UserRole).value<Actor*>();
             actor->image = ba;
             actor->imageHasChanged = true;
             onActorChanged();
@@ -986,7 +1000,7 @@ void TvShowWidgetTvShow::onArtPageTwo()
 /**
  * \brief Marks the show as changed when the name has changed
  */
-void TvShowWidgetTvShow::onNameChange(QString text)
+void TvShowWidgetTvShow::onTitleChange(QString text)
 {
     m_show->setTitle(std::move(text));
     ui->buttonRevert->setVisible(true);
@@ -1010,9 +1024,21 @@ void TvShowWidgetTvShow::onTvdbIdChange(QString text)
     ui->buttonRevert->setVisible(true);
 }
 
+void TvShowWidgetTvShow::onTvMazeIdChange(QString text)
+{
+    m_show->setTvMazeId(TvMazeId(std::move(text)));
+    ui->buttonRevert->setVisible(true);
+}
+
 void TvShowWidgetTvShow::onSortTitleChange(QString text)
 {
     m_show->setSortTitle(std::move(text));
+    ui->buttonRevert->setVisible(true);
+}
+
+void TvShowWidgetTvShow::onOriginalTitleChange(QString text)
+{
+    m_show->setOriginalTitle(std::move(text));
     ui->buttonRevert->setVisible(true);
 }
 
@@ -1106,12 +1132,11 @@ void TvShowWidgetTvShow::onAddExtraFanart()
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(ImageType::TvShowExtraFanart);
-    imageDialog->clear();
     imageDialog->setMultiSelection(true);
     imageDialog->setTvShow(m_show);
-    imageDialog->setDownloads(m_show->backdrops());
+    imageDialog->setDefaultDownloads(m_show->backdrops());
 
-    imageDialog->exec(ImageType::TvShowExtraFanart);
+    imageDialog->execWithType(ImageType::TvShowExtraFanart);
     const int exitCode = imageDialog->result();
     const QVector<QUrl> imageUrls = imageDialog->imageUrls();
     imageDialog->deleteLater();
@@ -1165,23 +1190,22 @@ void TvShowWidgetTvShow::onChooseImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(image->imageType());
-    imageDialog->clear();
     imageDialog->setTvShow(m_show);
     switch (image->imageType()) {
-    case ImageType::TvShowPoster: imageDialog->setDownloads(m_show->posters()); break;
-    case ImageType::TvShowBackdrop: imageDialog->setDownloads(m_show->backdrops()); break;
-    case ImageType::TvShowBanner: imageDialog->setDownloads(m_show->banners()); break;
-    default: imageDialog->setDownloads(QVector<Poster>()); break;
+    case ImageType::TvShowPoster: imageDialog->setDefaultDownloads(m_show->posters()); break;
+    case ImageType::TvShowBackdrop: imageDialog->setDefaultDownloads(m_show->backdrops()); break;
+    case ImageType::TvShowBanner: imageDialog->setDefaultDownloads(m_show->banners()); break;
+    default: break;
     }
 
-    imageDialog->exec(image->imageType());
+    imageDialog->execWithType(image->imageType());
     const int exitCode = imageDialog->result();
     const QUrl imageUrl = imageDialog->imageUrl();
     imageDialog->deleteLater();
@@ -1204,7 +1228,7 @@ void TvShowWidgetTvShow::onDeleteImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }
@@ -1219,7 +1243,7 @@ void TvShowWidgetTvShow::onImageDropped(ImageType imageType, QUrl imageUrl)
     if (m_show == nullptr) {
         return;
     }
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }

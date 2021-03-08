@@ -18,12 +18,9 @@ class AlphabeticalList;
 class Movie;
 class MovieProxyModel;
 
-/**
- * \brief The MovieFilesWidget class
- * This widget displays a list of movies
- * It's a singleton and gets constructed through the gui,
- * the instance can be retrieved through MovieFilesWidget::instance
- */
+/// \brief   This widget displays a list of movies
+/// \details It's a singleton and gets constructed through the gui,
+///          the instance can be retrieved through MovieFilesWidget::instance
 class MovieFilesWidget : public QWidget
 {
     Q_OBJECT
@@ -35,6 +32,7 @@ public:
     QVector<Movie*> selectedMovies();
     void renewModel();
     void selectMovie(Movie* movie);
+    void selectIndex(const QModelIndex& index);
 
 public slots:
     void restoreLastSelection();
@@ -71,7 +69,7 @@ private slots:
     void onLeftEdge(bool isEdge);
     void onActionMediaStatusColumn();
     void onLabel();
-    void onViewUpdated();
+    void updateStatusLabel();
     void playMovie(QModelIndex idx);
     void openNfoFile();
 

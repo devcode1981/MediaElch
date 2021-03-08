@@ -70,7 +70,7 @@ void Message::setId(int id)
  * \return Id of the message
  * \see Message::setId
  */
-int Message::id()
+int Message::id() const
 {
     return m_id;
 }
@@ -117,12 +117,12 @@ void Message::timeout()
     emit sigHideMessage(m_id);
 }
 
-int Message::maxValue()
+int Message::maxValue() const
 {
     return ui->progressBar->maximum();
 }
 
-int Message::value()
+int Message::value() const
 {
     return ui->progressBar->value();
 }

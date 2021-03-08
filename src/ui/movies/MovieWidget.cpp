@@ -12,7 +12,7 @@
 #include "globals/MessageIds.h"
 #include "globals/TrailerDialog.h"
 #include "image/ImageCapture.h"
-#include "scrapers/movie/CustomMovieScraper.h"
+#include "scrapers/movie/custom/CustomMovieScraper.h"
 #include "ui/main/MainWindow.h"
 #include "ui/movies/MovieFilesWidget.h"
 #include "ui/movies/MovieSearch.h"
@@ -302,7 +302,7 @@ void MovieWidget::clear()
     ui->banner->clear();
     ui->thumb->clear();
 
-    bool blocked;
+    bool blocked = false;
     blocked = ui->released->blockSignals(true);
     ui->released->setDate(QDate::currentDate());
     ui->released->blockSignals(blocked);
@@ -432,6 +432,8 @@ void MovieWidget::setMovie(Movie* movie)
  */
 void MovieWidget::startScraperSearch()
 {
+    using namespace mediaelch::scraper;
+
     if (m_movie == nullptr) {
         qDebug() << "My movie is invalid";
         return;
@@ -451,11 +453,11 @@ void MovieWidget::startScraperSearch()
     }
 
     setDisabledTrue();
-    QHash<MovieScraperInterface*, QString> ids;
+    QHash<MovieScraper*, QString> ids;
     QSet<MovieScraperInfo> infosToLoad;
-    if (searchWidget->scraperId() == CustomMovieScraper::scraperIdentifier) {
+    if (searchWidget->scraperId() == CustomMovieScraper::ID) {
         ids = searchWidget->customScraperIds();
-        infosToLoad = Settings::instance()->scraperInfos<MovieScraperInfo>(CustomMovieScraper::scraperIdentifier);
+        infosToLoad = Settings::instance()->scraperInfos<MovieScraperInfo>(CustomMovieScraper::ID);
     } else {
         ids.insert(0, searchWidget->scraperMovieId());
         infosToLoad = searchWidget->infosToLoad();
@@ -533,7 +535,7 @@ void MovieWidget::onSetImage(Movie* movie, ImageType type, QByteArray imageData)
         return;
     }
 
-    for (auto image : ui->artStackedWidget->findChildren<ClosableImage*>()) {
+    for (auto* image : ui->artStackedWidget->findChildren<ClosableImage*>()) {
         if (image->imageType() == type) {
             image->setLoading(false);
             image->setImage(imageData);
@@ -654,7 +656,7 @@ void MovieWidget::updateMovieInfo()
         item1->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable);
         ui->subtitles->setItem(row, 1, item1);
 
-        auto item2 = new QTableWidgetItem;
+        auto* item2 = new QTableWidgetItem;
         item2->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
         item2->setCheckState(subtitle->forced() ? Qt::Checked : Qt::Unchecked);
         ui->subtitles->setItem(row, 2, item2);
@@ -683,7 +685,7 @@ void MovieWidget::updateMovieInfo()
     ui->tagCloud->setTags(tags, m_movie->tags());
     ui->countryCloud->setTags(countries, m_movie->countries());
     ui->studioCloud->setTags(m_movie->studios(), m_movie->studios());
-    auto completer = new QCompleter(studios, this);
+    auto* completer = new QCompleter(studios, this);
     completer->setCaseSensitivity(Qt::CaseInsensitive);
     ui->studioCloud->setCompleter(completer);
 
@@ -730,7 +732,7 @@ void MovieWidget::updateMovieInfo()
 void MovieWidget::updateImages(QVector<ImageType> images)
 {
     for (const auto imageType : images) {
-        for (auto cImage : ui->artStackedWidget->findChildren<ClosableImage*>()) {
+        for (auto* cImage : ui->artStackedWidget->findChildren<ClosableImage*>()) {
             if (cImage->imageType() == imageType) {
                 updateImage(imageType, cImage);
                 break;
@@ -815,7 +817,7 @@ void MovieWidget::updateStreamDetails(bool reloadFromFile)
         edit1->setPlaceholderText(tr("Language"));
         edit2->setPlaceholderText(tr("Codec"));
         edit3->setPlaceholderText(tr("Channels"));
-        auto layout = new QHBoxLayout();
+        auto* layout = new QHBoxLayout();
         layout->addWidget(edit1);
         layout->addWidget(edit2);
         layout->addWidget(edit3);
@@ -845,7 +847,7 @@ void MovieWidget::updateStreamDetails(bool reloadFromFile)
                 new QLineEdit(streamDetails->subtitleDetails().at(i).value(StreamDetails::SubtitleDetails::Language));
             edit1->setToolTip(tr("Language"));
             edit1->setPlaceholderText(tr("Language"));
-            auto layout = new QHBoxLayout();
+            auto* layout = new QHBoxLayout();
             layout->addWidget(edit1);
             layout->addStretch(10);
             ui->streamDetails->addLayout(layout, 9 + audioTracks + i, 1);
@@ -1052,7 +1054,7 @@ void MovieWidget::removeActor()
  */
 void MovieWidget::onActorEdited(QTableWidgetItem* item)
 {
-    auto actor = ui->actors->item(item->row(), 1)->data(Qt::UserRole).value<Actor*>();
+    auto* actor = ui->actors->item(item->row(), 1)->data(Qt::UserRole).value<Actor*>();
     if (item->column() == 0) {
         actor->name = item->text();
     } else if (item->column() == 1) {
@@ -1064,7 +1066,7 @@ void MovieWidget::onActorEdited(QTableWidgetItem* item)
 
 void MovieWidget::onSubtitleEdited(QTableWidgetItem* item)
 {
-    auto subtitle = ui->subtitles->item(item->row(), 0)->data(Qt::UserRole).value<Subtitle*>();
+    auto* subtitle = ui->subtitles->item(item->row(), 0)->data(Qt::UserRole).value<Subtitle*>();
     if (subtitle == nullptr) {
         return;
     }
@@ -1177,7 +1179,7 @@ void MovieWidget::onChangeActorImage()
     if (!fileName.isNull()) {
         QFile file(fileName);
         if (file.open(QIODevice::ReadOnly)) {
-            auto actor = ui->actors->item(ui->actors->currentRow(), 1)->data(Qt::UserRole).value<Actor*>();
+            auto* actor = ui->actors->item(ui->actors->currentRow(), 1)->data(Qt::UserRole).value<Actor*>();
             actor->image = file.readAll();
             actor->imageHasChanged = true;
             onActorChanged();
@@ -1265,7 +1267,7 @@ void MovieWidget::onImdbIdChange(QString text)
     if (m_movie == nullptr) {
         return;
     }
-    m_movie->setId(ImdbId(text));
+    m_movie->setImdbId(ImdbId(text));
     ui->btnImdb->setEnabled(m_movie->imdbId().isValid());
     ui->buttonRevert->setVisible(true);
 }
@@ -1595,12 +1597,11 @@ void MovieWidget::onAddExtraFanart()
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(ImageType::MovieExtraFanart);
-    imageDialog->clear();
     imageDialog->setMultiSelection(true);
     imageDialog->setMovie(m_movie);
-    imageDialog->setDownloads(m_movie->images().backdrops());
+    imageDialog->setDefaultDownloads(m_movie->images().backdrops());
 
-    imageDialog->exec(ImageType::MovieBackdrop);
+    imageDialog->execWithType(ImageType::MovieBackdrop);
     const int exitCode = imageDialog->result();
     const QVector<QUrl> imageUrls = imageDialog->imageUrls();
     imageDialog->deleteLater();
@@ -1640,26 +1641,23 @@ void MovieWidget::onChooseImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(image->imageType());
-    imageDialog->clear();
     imageDialog->setMovie(m_movie);
     if (image->imageType() == ImageType::MoviePoster) {
-        imageDialog->setDownloads(m_movie->images().posters());
+        imageDialog->setDefaultDownloads(m_movie->images().posters());
     } else if (image->imageType() == ImageType::MovieBackdrop) {
-        imageDialog->setDownloads(m_movie->images().backdrops());
+        imageDialog->setDefaultDownloads(m_movie->images().backdrops());
     } else if (image->imageType() == ImageType::MovieCdArt && !m_movie->images().discArts().isEmpty()) {
-        imageDialog->setDownloads(m_movie->images().discArts());
-    } else {
-        imageDialog->setDownloads(QVector<Poster>());
+        imageDialog->setDefaultDownloads(m_movie->images().discArts());
     }
 
-    imageDialog->exec(image->imageType());
+    imageDialog->execWithType(image->imageType());
     const int exitCode = imageDialog->result();
     const QUrl imageUrl = imageDialog->imageUrl();
     imageDialog->deleteLater();
@@ -1729,7 +1727,7 @@ void MovieWidget::onDeleteImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }

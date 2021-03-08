@@ -3,7 +3,7 @@
 #include "globals/Globals.h"
 #include "globals/ScraperInfos.h"
 #include "globals/ScraperResult.h"
-#include "scrapers/movie/MovieScraperInterface.h"
+#include "scrapers/movie/MovieScraper.h"
 
 #include <QSignalMapper>
 #include <QString>
@@ -25,7 +25,7 @@ public:
 
 public slots:
     void search(QString searchString);
-    int scraperNo();
+    int scraperNo() const;
     QString scraperId();
     QString scraperId2();
     QSet<MusicScraperInfo> infosToLoad();

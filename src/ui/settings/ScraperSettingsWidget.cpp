@@ -2,12 +2,13 @@
 #include "ui_ScraperSettingsWidget.h"
 
 #include "globals/Manager.h"
-#include "scrapers/concert/ConcertScraperInterface.h"
-#include "scrapers/movie/CustomMovieScraper.h"
-#include "scrapers/movie/IMDB.h"
-#include "scrapers/movie/MovieScraperInterface.h"
-#include "scrapers/music/MusicScraperInterface.h"
-#include "scrapers/tv_show/TvScraperInterface.h"
+#include "scrapers/concert/ConcertScraper.h"
+#include "scrapers/movie/MovieScraper.h"
+#include "scrapers/movie/custom/CustomMovieScraper.h"
+#include "scrapers/movie/imdb/ImdbMovie.h"
+#include "scrapers/music/MusicScraper.h"
+#include "scrapers/tv_show/TvScraper.h"
+#include "scrapers/tv_show/thetvdb/TheTvDb.h"
 #include "settings/Settings.h"
 
 ScraperSettingsWidget::ScraperSettingsWidget(QWidget* parent) : QWidget(parent), ui(new Ui::ScraperSettingsWidget)
@@ -27,7 +28,7 @@ ScraperSettingsWidget::ScraperSettingsWidget(QWidget* parent) : QWidget(parent),
     int scraperCounter = 0;
     for (auto* scraper : Manager::instance()->scrapers().movieScrapers()) {
         if (scraper->hasSettings()) {
-            auto* name = new QLabel("<b>" + scraper->name() + "</b>");
+            auto* name = new QLabel("<b>" + scraper->meta().name + "</b>");
             name->setAlignment(Qt::AlignRight);
             name->setStyleSheet("margin-top: 3px;");
             ui->gridLayoutScrapers->addWidget(name, scraperCounter, 0);
@@ -36,19 +37,13 @@ ScraperSettingsWidget::ScraperSettingsWidget(QWidget* parent) : QWidget(parent),
             scraperCounter++;
         }
     }
-    for (auto* scraper : Manager::instance()->scrapers().tvScrapers()) {
-        if (scraper->hasSettings()) {
-            auto* name = new QLabel("<b>" + scraper->name() + "</b>");
-            name->setAlignment(Qt::AlignRight);
-            name->setStyleSheet("margin-top: 3px;");
-            ui->gridLayoutScrapers->addWidget(name, scraperCounter, 0);
-            ui->gridLayoutScrapers->addWidget(scraper->settingsWidget(), scraperCounter, 1);
-            scraperCounter++;
-        }
-    }
+
+    // TODO:
+    // TV scraper settings.
+
     for (auto* scraper : Manager::instance()->scrapers().concertScrapers()) {
         if (scraper->hasSettings()) {
-            auto* name = new QLabel("<b>" + scraper->name() + "</b>");
+            auto* name = new QLabel("<b>" + scraper->meta().name + "</b>");
             name->setAlignment(Qt::AlignRight);
             name->setStyleSheet("margin-top: 3px;");
             ui->gridLayoutScrapers->addWidget(name, scraperCounter, 0);
@@ -67,9 +62,9 @@ ScraperSettingsWidget::ScraperSettingsWidget(QWidget* parent) : QWidget(parent),
         }
     }
 
-    for (ImageProviderInterface* scraper : Manager::instance()->imageProviders()) {
+    for (auto* scraper : Manager::instance()->imageProviders()) {
         if (scraper->hasSettings()) {
-            auto* name = new QLabel("<b>" + scraper->name() + "</b>");
+            auto* name = new QLabel("<b>" + scraper->meta().name + "</b>");
             name->setAlignment(Qt::AlignRight);
             name->setStyleSheet("margin-top: 3px;");
             ui->gridLayoutScrapers->addWidget(name, scraperCounter, 0);
@@ -92,6 +87,7 @@ void ScraperSettingsWidget::setSettings(Settings& settings)
 {
     m_settings = &settings;
     ui->tvScraperSettings->setSettings(settings);
+    ui->customTvScraperSettings->setSettings(settings);
 }
 
 void ScraperSettingsWidget::loadSettings()
@@ -132,6 +128,7 @@ void ScraperSettingsWidget::loadSettings()
     }
 
     ui->tvScraperSettings->loadSettings();
+    ui->customTvScraperSettings->loadSettings();
 
     onShowAdultScrapers();
 }
@@ -143,7 +140,7 @@ void ScraperSettingsWidget::saveSettings()
     // Custom movie scraper
     QMap<MovieScraperInfo, QString> customMovieScraper;
     for (int row = 0, n = ui->customScraperTable->rowCount(); row < n; ++row) {
-        auto box = dynamic_cast<QComboBox*>(ui->customScraperTable->cellWidget(row, 1));
+        auto* box = dynamic_cast<QComboBox*>(ui->customScraperTable->cellWidget(row, 1));
         MovieScraperInfo info = MovieScraperInfo(box->itemData(0, Qt::UserRole + 1).toInt());
         QString scraper = box->itemData(box->currentIndex()).toString();
         customMovieScraper.insert(info, scraper);
@@ -151,13 +148,14 @@ void ScraperSettingsWidget::saveSettings()
     m_settings->setCustomMovieScraper(customMovieScraper);
 
     ui->tvScraperSettings->saveSettings();
+    ui->customTvScraperSettings->saveSettings();
 }
 
 void ScraperSettingsWidget::onShowAdultScrapers()
 {
     bool show = ui->chkEnableAdultScrapers->isChecked();
     for (const auto* scraper : Manager::instance()->scrapers().movieScrapers()) {
-        if (scraper->isAdult() && scraper->hasSettings()) {
+        if (scraper->meta().isAdult && scraper->hasSettings()) {
             ui->gridLayoutScrapers->itemAtPosition(m_scraperRows.value(scraper), 0)->widget()->setVisible(show);
             ui->gridLayoutScrapers->itemAtPosition(m_scraperRows.value(scraper), 1)->widget()->setVisible(show);
         }
@@ -168,7 +166,7 @@ QComboBox* ScraperSettingsWidget::comboForMovieScraperInfo(const MovieScraperInf
 {
     QString currentScraper = m_settings->customMovieScraper().value(info, "notset");
 
-    auto box = new QComboBox();
+    auto* box = new QComboBox();
     int index = 0;
     if (info != MovieScraperInfo::Title) {
         box->addItem(tr("Don't use"), "");
@@ -176,13 +174,13 @@ QComboBox* ScraperSettingsWidget::comboForMovieScraperInfo(const MovieScraperInf
         index = 1;
     }
     for (auto* scraper : Manager::instance()->scrapers().movieScrapers()) {
-        if (scraper->identifier() == CustomMovieScraper::scraperIdentifier) {
+        if (scraper->meta().identifier == mediaelch::scraper::CustomMovieScraper::ID) {
             continue;
         }
         if (scraper->scraperNativelySupports().contains(info)) {
-            box->addItem(scraper->name(), scraper->identifier());
+            box->addItem(scraper->meta().name, scraper->meta().identifier);
             box->setItemData(index, static_cast<int>(info), Qt::UserRole + 1);
-            if (scraper->identifier() == currentScraper || (currentScraper == "notset" && index == 1)) {
+            if (scraper->meta().identifier == currentScraper || (currentScraper == "notset" && index == 1)) {
                 box->setCurrentIndex(index);
             }
             index++;
@@ -198,11 +196,11 @@ QComboBox* ScraperSettingsWidget::comboForMovieScraperInfo(const MovieScraperInf
         MovieScraperInfo::Poster};
 
     if (images.contains(info)) {
-        for (const auto img : Manager::instance()->imageProviders()) {
-            if (img->identifier() == "images.fanarttv") {
-                box->addItem(img->name(), img->identifier());
+        for (auto* const img : Manager::instance()->imageProviders()) {
+            if (img->meta().identifier == mediaelch::scraper::FanartTv::ID) {
+                box->addItem(img->meta().name, img->meta().identifier);
                 box->setItemData(index, static_cast<int>(info), Qt::UserRole + 1);
-                if (img->identifier() == currentScraper || (currentScraper == "notset" && index == 1)) {
+                if (img->meta().identifier == currentScraper || (currentScraper == "notset" && index == 1)) {
                     box->setCurrentIndex(index);
                 }
                 index++;

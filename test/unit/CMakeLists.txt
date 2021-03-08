@@ -8,12 +8,17 @@ target_sources(
     data/testLocale.cpp
     data/testTmdbId.cpp
     data/testCertification.cpp
+    file/testNameFormatter.cpp
+    file/testStackedBaseName.cpp
     globals/testVersionInfo.cpp
     globals/testTime.cpp
     movie/testMovieFileSearcher.cpp
+    scrapers/testImdbTvEpisodeParser.cpp
+    scrapers/testImdbTvSeasonParser.cpp
     settings/testAdvancedSettings.cpp
     tv_shows/testTvShowFileSearcher.cpp
     tv_shows/testTvDbId.cpp
+    tv_shows/testTvMazeId.cpp
 )
 
 target_link_libraries(

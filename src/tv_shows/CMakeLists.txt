@@ -6,9 +6,11 @@ add_library(
   model/TvShowModelItem.cpp
   model/TvShowRootModelItem.cpp
   EpisodeNumber.cpp
+  EpisodeMap.cpp
   SeasonNumber.cpp
   SeasonOrder.cpp
   TvDbId.cpp
+  TvMazeId.cpp
   TvShow.cpp
   TvShowEpisode.cpp
   TvShowFileSearcher.cpp

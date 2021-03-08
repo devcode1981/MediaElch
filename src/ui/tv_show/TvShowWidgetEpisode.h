@@ -53,6 +53,7 @@ private slots:
 
     void onImdbIdChanged(QString imdbid);
     void onTvdbIdChanged(QString tvdbid);
+    void onTvmazeIdChanged(QString tvmazeId);
     void onNameChange(QString text);
     void onShowTitleChange(QString text);
     void onSeasonChange(int value);
@@ -75,6 +76,8 @@ private slots:
     void onReloadStreamDetails();
     void updateStreamDetails(bool reloadFromFile = false);
 
+    void onAddTag(QString tag);
+    void onRemoveTag(QString tag);
     void onAddActor();
     void onRemoveActor();
     void onActorChanged();

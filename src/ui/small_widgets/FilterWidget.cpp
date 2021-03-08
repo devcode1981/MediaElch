@@ -125,6 +125,11 @@ void FilterWidget::onFilterTextChanged(QString text)
             filter->setShortText(text);
         }
 
+        if (filter->isInfo(MovieFilters::OriginalTitle)) {
+            filter->setText(tr("Original Title contains \"%1\"").arg(text));
+            filter->setShortText(text);
+        }
+
         if (filter->isInfo(MovieFilters::Path)) {
             filter->setText(tr("Filename contains \"%1\"").arg(text));
             filter->setShortText(text);
@@ -275,6 +280,7 @@ void FilterWidget::setupFilters()
     case MainWidgets::Genres:
     case MainWidgets::Certifications:
     case MainWidgets::Downloads:
+    case MainWidgets::Duplicates:
         // Filtering not possible.
         break;
     }
@@ -421,6 +427,7 @@ void FilterWidget::initAvailableFilters()
 {
     // clang-format off
     m_availableMovieFilters << new Filter(tr("Title"),                "",               QStringList(),                  MovieFilters::Title,  true);
+    m_availableMovieFilters << new Filter(tr("Original Title"),       "",               QStringList(),                  MovieFilters::OriginalTitle, true);
     m_availableMovieFilters << new Filter(tr("Filename"),             "",               QStringList(),                  MovieFilters::Path,   true);
     m_availableMovieFilters << new Filter(tr("IMDb ID"),              "",               QStringList(),                  MovieFilters::ImdbId, true);
     m_availableMovieFilters << new Filter(tr("Movie has no IMDb ID"), tr("No IMDb ID"), {tr("IMDb"), tr("No IMDb ID")}, MovieFilters::ImdbId, false);
@@ -549,7 +556,7 @@ void FilterWidget::setupFilterListUi()
     const qreal pixelRatio = helper::devicePixelRatio(m_list);
     if (pixelRatio >= 0.95 && pixelRatio <= 1.05) {
         // Pixel ratio is 1
-        auto effect = new QGraphicsDropShadowEffect(this);
+        auto* effect = new QGraphicsDropShadowEffect(this);
         effect->setBlurRadius(16);
         effect->setOffset(0);
         effect->setColor(QColor(0, 0, 0, 100));

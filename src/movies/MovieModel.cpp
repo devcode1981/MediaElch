@@ -15,23 +15,29 @@ MovieModel::MovieModel(QObject* parent) :
 #endif
 {
 #ifndef Q_OS_WIN
-    auto font = new MyIconFont(this);
+    auto* font = new MyIconFont(this);
     font->initFontAwesome();
     m_syncIcon = font->icon("refresh_cloud", QColor(248, 148, 6), QColor(255, 255, 255), "", 0, 1.0);
     m_newIcon = font->icon("star", QColor(58, 135, 173), QColor(255, 255, 255), "", 0, 1.0);
 #endif
 }
 
-/**
- * \brief Adds a movie to the model
- * \param movie Movie to add
- */
 void MovieModel::addMovie(Movie* movie)
 {
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
     m_movies.append(movie);
     endInsertRows();
     connect(movie, &Movie::sigChanged, this, &MovieModel::onMovieChanged, Qt::UniqueConnection);
+}
+
+void MovieModel::addMovies(const QVector<Movie*>& movies)
+{
+    beginInsertRows(QModelIndex(), rowCount(), rowCount() + movies.size() - 1);
+    m_movies.append(movies);
+    for (Movie* movie : movies) {
+        connect(movie, &Movie::sigChanged, this, &MovieModel::onMovieChanged, Qt::UniqueConnection);
+    }
+    endInsertRows();
 }
 
 /**
@@ -51,11 +57,6 @@ void MovieModel::update()
     emit dataChanged(index, index);
 }
 
-/**
- * \brief Get a specific movie
- * \param row Row of the movie
- * \return Movie object
- */
 Movie* MovieModel::movie(int row)
 {
     if (row < 0 || row >= m_movies.count()) {
@@ -64,23 +65,23 @@ Movie* MovieModel::movie(int row)
     return m_movies.at(row);
 }
 
-/**
- * \brief Returns the rowcount in our model. (=number of movies)
- * \return Number of rows (=number of movies)
- */
 int MovieModel::rowCount(const QModelIndex& parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        // Root has an invalid model index.
+        return 0;
+    }
     return m_movies.size();
 }
 
-/**
- * \brief Get the column count of our model
- */
 int MovieModel::columnCount(const QModelIndex& parent) const
 {
-    Q_UNUSED(parent);
+    if (parent.isValid()) {
+        // Root has an invalid model index.
+        return 0;
+    }
     // return roleNames().size();
+    // Sync Icon + Name + MediaStatusColumns
     return 2 + static_cast<int>(MediaStatusColumn::Last) - static_cast<int>(MediaStatusColumn::First);
 }
 
@@ -99,37 +100,41 @@ QVariant MovieModel::data(const QModelIndex& index, int role) const
         return index.row();
     }
 
-    const Movie* const movie = m_movies[index.row()];
+    Movie* movie = m_movies[index.row()];
+
+    if (role == Qt::UserRole + 22) {
+        return QVariant::fromValue(movie);
+    }
 
     if (index.column() == 0) {
         if (role == Qt::DisplayRole) {
             return helper::appendArticle(movie->name());
         }
-        if (role == Qt::ToolTipRole || role == Qt::UserRole + 7) {
+        if (role == Qt::ToolTipRole || role == Roles::FileNameRole) {
             if (movie->files().isEmpty()) {
                 return QVariant();
             }
             return movie->files().first().toString();
         }
-        if (role == Qt::UserRole + 1) {
+        if (role == Roles::InfoLoadedRole) {
             return movie->controller()->infoLoaded();
         }
-        if (role == Qt::UserRole + 2) {
+        if (role == Roles::HasChangedRole) {
             return movie->hasChanged();
         }
-        if (role == Qt::UserRole + 3) {
+        if (role == Roles::ReleasedRole) {
             return movie->released();
         }
-        if (role == Qt::UserRole + 4) {
+        if (role == Roles::HasWatchedRole) {
             return movie->watched();
         }
-        if (role == Qt::UserRole + 5) {
+        if (role == Roles::FileLastModifiedRole) {
             return movie->fileLastModified();
         }
-        if (role == Qt::UserRole + 6) {
+        if (role == Roles::SyncNeededRole) {
             return movie->syncNeeded();
         }
-        if (role == Qt::UserRole + 8) {
+        if (role == Roles::SortTitleRole) {
             // 8: Sort title or the "normalized" title if the former does not exist.
             QString sortTitle = movie->sortTitle();
             if (sortTitle.isEmpty()) {
@@ -231,26 +236,19 @@ QModelIndex MovieModel::index(int row, int column, const QModelIndex& parent) co
     return createIndex(row, column);
 }
 
-/**
- * \brief Clears the current contents
- */
 void MovieModel::clear()
 {
     if (m_movies.isEmpty()) {
         return;
     }
     beginRemoveRows(QModelIndex(), 0, m_movies.size() - 1);
-    for (Movie* movie : m_movies) {
+    for (Movie* movie : asConst(m_movies)) {
         movie->deleteLater();
     }
     m_movies.clear();
     endRemoveRows();
 }
 
-/**
- * \brief Returns a list of all movies
- * \return List of movies
- */
 QVector<Movie*> MovieModel::movies()
 {
     return m_movies;
@@ -276,8 +274,9 @@ int MovieModel::mediaStatusToColumn(MediaStatusColumn column)
     case MediaStatusColumn::Trailer: return 6;
     case MediaStatusColumn::LocalTrailer: return 7;
     case MediaStatusColumn::Id: return 1;
-    default: return -1;
+    case MediaStatusColumn::Unknown: return -1;
     }
+    return -1;
 }
 
 MediaStatusColumn MovieModel::columnToMediaStatus(int column)
@@ -303,6 +302,7 @@ QString MovieModel::mediaStatusToText(MediaStatusColumn column)
     case MediaStatusColumn::Trailer: return tr("Trailer");
     case MediaStatusColumn::LocalTrailer: return tr("Local Trailer");
     case MediaStatusColumn::Id: return tr("IMDb ID");
-    default: return QString();
+    case MediaStatusColumn::Unknown: return {};
     }
+    return {};
 }

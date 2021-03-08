@@ -1,38 +1,51 @@
 #pragma once
 
 #include "globals/ScraperInfos.h"
+#include "music/MusicBrainzId.h"
 #include "network/NetworkManager.h"
-#include "scrapers/music/MusicScraperInterface.h"
+#include "scrapers/music/AllMusic.h"
+#include "scrapers/music/Discogs.h"
+#include "scrapers/music/MusicBrainz.h"
+#include "scrapers/music/MusicScraper.h"
+#include "scrapers/music/TheAudioDb.h"
 
 #include <QComboBox>
 #include <QMutex>
 #include <QObject>
 #include <QWidget>
 
-class UniversalMusicScraper : public MusicScraperInterface
+namespace mediaelch {
+namespace scraper {
+
+class UniversalMusicScraper : public MusicScraper
 {
     Q_OBJECT
 public:
     explicit UniversalMusicScraper(QObject* parent = nullptr);
-    static constexpr const char* scraperIdentifier = "UniversalMusicScraper";
+    static constexpr const char* ID = "UniversalMusicScraper";
 
     QString name() const override;
     QString identifier() const override;
     void searchAlbum(QString artistName, QString searchStr) override;
     void searchArtist(QString searchStr) override;
-    void loadData(QString mbId, Artist* artist, QSet<MusicScraperInfo> infos) override;
-    void loadData(QString mbAlbumId, QString mbReleaseGroupId, Album* album, QSet<MusicScraperInfo> infos) override;
+    void loadData(MusicBrainzId mbId, Artist* artist, QSet<MusicScraperInfo> infos) override;
+    void loadData(MusicBrainzId mbAlbumId,
+        MusicBrainzId mbReleaseGroupId,
+        Album* album,
+        QSet<MusicScraperInfo> infos) override;
     bool hasSettings() const override;
     void loadSettings(ScraperSettings& settings) override;
     void saveSettings(ScraperSettings& settings) override;
     QSet<MusicScraperInfo> scraperSupports() override;
     QWidget* settingsWidget() override;
 
+public:
+    /// \todo Remove
+    static bool shouldLoad(MusicScraperInfo info, QSet<MusicScraperInfo> infos, Artist* artist);
+    /// \todo Remove
+    static bool shouldLoad(MusicScraperInfo info, QSet<MusicScraperInfo> infos, Album* album);
+
 private slots:
-    void onSearchArtistFinished();
-    void onSearchAlbumFinished();
-    void onArtistRelsFinished();
-    void onAlbumRelsFinished();
     void onArtistLoadFinished();
     void onAlbumLoadFinished();
 
@@ -58,24 +71,24 @@ private:
     QMutex m_artistMutex;
     QMutex m_albumMutex;
 
+    mediaelch::scraper::MusicBrainzApi m_musicBrainzApi;
+    mediaelch::scraper::MusicBrainz m_musicBrainz;
+    mediaelch::scraper::TheAudioDbApi m_theAudioDbApi;
+    mediaelch::scraper::TheAudioDb m_theAudioDb;
+    mediaelch::scraper::AllMusicApi m_allMusicApi;
+    mediaelch::scraper::AllMusic m_allMusic;
+    mediaelch::scraper::Discogs m_discogs;
+
     mediaelch::network::NetworkManager* network();
     QString trim(QString text);
-    bool shouldLoad(MusicScraperInfo info, QSet<MusicScraperInfo> infos, Artist* artist);
-    bool shouldLoad(MusicScraperInfo info, QSet<MusicScraperInfo> infos, Album* album);
+
     bool infosLeft(QSet<MusicScraperInfo> infos, Artist* artist);
     bool infosLeft(QSet<MusicScraperInfo> infos, Album* album);
     void appendDownloadElement(Artist* artist, QString source, QString type, QUrl url);
     void appendDownloadElement(Album* album, QString source, QString type, QUrl url);
-    void parseAndAssignMusicbrainzInfos(QString xml, Album* album, QSet<MusicScraperInfo> infos);
-    void parseAndAssignTadbInfos(QJsonObject document, Artist* artist, QSet<MusicScraperInfo> infos);
-    void parseAndAssignTadbInfos(QJsonObject document, Album* album, QSet<MusicScraperInfo> infos);
-    void parseAndAssignTadbDiscography(QJsonObject document, Artist* artist, QSet<MusicScraperInfo> infos);
-    void parseAndAssignAmInfos(QString html, Artist* artist, QSet<MusicScraperInfo> infos);
-    void parseAndAssignAmInfos(QString html, Album* album, QSet<MusicScraperInfo> infos);
-    void parseAndAssignAmBiography(QString html, Artist* artist, QSet<MusicScraperInfo> infos);
-    void parseAndAssignAmDiscography(QString html, Artist* artist, QSet<MusicScraperInfo> infos);
-    void parseAndAssignDiscogsInfos(QString html, Artist* artist, QSet<MusicScraperInfo> infos);
-    void parseAndAssignDiscogsInfos(QString html, Album* album, QSet<MusicScraperInfo> infos);
     void processDownloadElement(DownloadElement elem, Artist* artist, QSet<MusicScraperInfo> infos);
     void processDownloadElement(DownloadElement elem, Album* album, QSet<MusicScraperInfo> infos);
 };
+
+} // namespace scraper
+} // namespace mediaelch

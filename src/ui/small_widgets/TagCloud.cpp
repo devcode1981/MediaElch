@@ -63,7 +63,7 @@ void TagCloud::drawTags(bool printAll)
     tags.reserve(m_tags.size());
 
     // \todo(bugwelle) Refactor. This is currently an ugly solution.
-    // This ensures that at least 150 tags.
+    // This ensures that we have at most 150 tags.
     const int maxNonActiveTagCount = (m_activeTags.size() > 150) ? 3 : 150;
     int nonActiveTagCount = 0;
 
@@ -79,7 +79,7 @@ void TagCloud::drawTags(bool printAll)
     }
 
     for (const QString& word : tags) {
-        auto badge = new Badge(word, ui->scrollAreaWidgetContents);
+        auto* badge = new Badge(word, ui->scrollAreaWidgetContents);
         if (m_badgeType == TagCloud::BadgeType::SimpleLabel) {
             badge->setBadgeType(Badge::Type::LabelWarning);
         } else {
@@ -105,7 +105,7 @@ void TagCloud::drawTags(bool printAll)
 
 
     if (!printAll && nonActiveTagCount > maxNonActiveTagCount) {
-        auto badge = new Badge("[...] Click to see all", ui->scrollAreaWidgetContents);
+        auto* badge = new Badge("[...] Click to see all", ui->scrollAreaWidgetContents);
         badge->setBadgeType(Badge::Type::BadgeDefault);
         badge->setShowActiveMark(false);
         badge->show();
@@ -198,7 +198,7 @@ void TagCloud::addTag()
     } else {
         m_tags.append(word);
         m_activeTags.append(word);
-        auto badge = new Badge(word, ui->scrollAreaWidgetContents);
+        auto* badge = new Badge(word, ui->scrollAreaWidgetContents);
         if (m_badgeType == TagCloud::BadgeType::SimpleLabel) {
             badge->setBadgeType(Badge::Type::LabelWarning);
             badge->setShowActiveMark(false);
@@ -221,7 +221,7 @@ QStringList TagCloud::activeTags() const
 
 void TagCloud::setText(const QString& text)
 {
-    ui->label->setText(text);
+    ui->lblTag->setText(text);
 }
 
 void TagCloud::setPlaceholder(const QString& placeholder)
@@ -253,4 +253,9 @@ void TagCloud::setCompleter(QCompleter* completer)
         ui->lineEdit,
         [this](const QString& /*unused*/) { ui->lineEdit->clear(); },
         Qt::QueuedConnection);
+}
+
+void TagCloud::hideLabel()
+{
+    ui->lblTag->hide();
 }

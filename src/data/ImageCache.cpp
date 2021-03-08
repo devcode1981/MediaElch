@@ -26,7 +26,7 @@ ImageCache::ImageCache(QObject* parent) : QObject(parent)
     if (exists) {
         m_cacheDir = location;
     }
-    qDebug() << "Cache dir" << m_cacheDir;
+    qDebug() << "[ImageCache] Using cache dir:" << m_cacheDir;
 
     m_forceCache = Settings::instance()->advanced()->forceCache();
 }
@@ -102,7 +102,8 @@ void ImageCache::invalidateImages(mediaelch::FilePath path)
 
     QString md5 = QCryptographicHash::hash(path.toString().toUtf8(), QCryptographicHash::Md5).toHex();
     QDir dir = m_cacheDir.dir();
-    for (const QString& file : dir.entryList(QStringList() << md5 + "*")) {
+    const QStringList entries = dir.entryList(QStringList() << md5 + "*");
+    for (const QString& file : entries) {
         QFile f(dir.absolutePath() + "/" + file);
         f.remove();
     }
@@ -145,7 +146,8 @@ void ImageCache::clearCache()
     if (!m_cacheDir.isValid() || !Settings::instance()->advanced()->forceCache()) {
         return;
     }
-    for (const QFileInfo& file : m_cacheDir.dir().entryInfoList(QDir::Files | QDir::NoDotAndDotDot)) {
+    const auto entries = m_cacheDir.dir().entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+    for (const QFileInfo& file : entries) {
         QFile(file.absoluteFilePath()).remove();
     }
 }

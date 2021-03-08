@@ -1,7 +1,7 @@
 language: generic
 
 os: linux
-dist: xenial
+dist: bionic
 
 branches:
   only:
@@ -65,13 +65,16 @@ jobs:
   #----------------------------------------------------------------------------
 
   - name: "macOS build"
-    env: QT=qtMac CXX=clang++ CC=clang MEDIAINFO_VERSION=20.03
+    env: QT=qtMac CXX=clang++ CC=clang MEDIAINFO_VERSION=20.09
     os: osx
+    osx_image: xcode12.2
     addons:
       homebrew:
         packages:
         - cmake
         - qt5
+        - svn
+        - p7zip
         update: true
     install:
       # Download MediaInfo & ZenLib
@@ -79,9 +82,10 @@ jobs:
         https://mediaarea.net/download/binary/libmediainfo0/${MEDIAINFO_VERSION}/MediaInfo_DLL_${MEDIAINFO_VERSION}_Mac_i386+x86_64.tar.bz2
       - tar -xvjf MediaInfo_DLL.tar.bz2
       - mv MediaInfoLib/libmediainfo.0.dylib ./
-      # The developer folder has a typo: Developpers
+      # The developer folder has a typo: Developers
       - mv MediaInfoLib/Develo*ers/Include/MediaInfoDLL MediaInfoDLL
       - rm -rf MediaInfoLib
+      - rm MediaInfo_DLL.tar.bz2
       - svn checkout https://github.com/MediaArea/ZenLib/trunk/Source/ZenLib
     before_script:
       - export PATH="/usr/local/opt/qt/bin:$PATH"
@@ -91,41 +95,9 @@ jobs:
     script:
       - make -j 2
     after_success:
-      - "${TRAVIS_BUILD_DIR}/travis-ci/package.sh"
-
-  #----------------------------------------------------------------------------
-
-  - name: "Linux Qt 5.12 build"
-    env: QT=qt512 QT_PPA=qt-5.12.3 CXX=g++ CC=gcc
-    os: linux
-    dist: xenial
-    install:
-      - "travis-ci/install_dependencies.sh"
-    before_script:
-      - export PATH="/opt/${QT}/bin:$PATH"
-      - mkdir build && cd build
-      - qmake --version
-      - qmake ../MediaElch.pro CONFIG+=release
-    script:
-      - make -j 2
-    after_success:
-      - "${TRAVIS_BUILD_DIR}/travis-ci/package.sh"
-
-  #----------------------------------------------------------------------------
-
-  - name: "Linux Qt 5.6 build"
-    env: QT=qt56 QT_PPA=qt563 CXX=g++ CC=gcc
-    os: linux
-    dist: xenial
-    install:
-      - "travis-ci/install_dependencies.sh"
-    before_script:
-      - export PATH="/opt/${QT}/bin:$PATH"
-      - mkdir build && cd build
-      - qmake --version
-      - qmake ../MediaElch.pro CONFIG+=release
-    script:
-      - make -j 2
+      - if [[ "$TRAVIS_PULL_REQUEST" = "false" && "${TRAVIS_BRANCH}" = "master" ]]; then
+          ${TRAVIS_BUILD_DIR}/.ci/package.sh;
+        fi
 
   #----------------------------------------------------------------------------
 
@@ -133,17 +105,17 @@ jobs:
     os: linux
     dist: bionic
     before_install:
-      - docker pull archer96/mediaelch-mxe-qt:latest
+      - docker pull mediaelch/mediaelch-ci-win:latest
     script:
       - docker run --rm --user "$(id -u "$(whoami)"):$(id -g "$(whoami)")"
-          -v ${TRAVIS_BUILD_DIR}:/src archer96/mediaelch-mxe-qt:latest
-            /bin/bash -xc "cd /src && ./travis-ci/win/build_windows.sh"
+          -v ${TRAVIS_BUILD_DIR}:/src mediaelch/mediaelch-ci-win:latest
+            /bin/bash -xc "cd /src && ./.ci/win/build_windows_release.sh"
     after_success:
       - if [[ "$TRAVIS_PULL_REQUEST" = "false" && "${TRAVIS_BRANCH}" = "master" ]]; then
           docker run --rm --user "$(id -u "$(whoami)"):$(id -g "$(whoami)")"
-            -v ${TRAVIS_BUILD_DIR}:/src archer96/mediaelch-mxe-qt:latest
-              /bin/bash -xc "cd /src && ./travis-ci/win/package_windows.sh";
-          ${TRAVIS_BUILD_DIR}/travis-ci/win/prepare_bintray_windows.sh;
+            -v ${TRAVIS_BUILD_DIR}:/src mediaelch/mediaelch-ci-win:latest
+              /bin/bash -xc "cd /src && ./.ci/win/package_windows.sh";
+          ${TRAVIS_BUILD_DIR}/.ci/win/prepare_bintray_windows.sh;
         fi
 
   #----------------------------------------------------------------------------
@@ -201,8 +173,8 @@ deploy:
   skip_cleanup: true
   on:
     branch: master
-    condition: -f ${TRAVIS_BUILD_DIR}/travis-ci/bintray.json
+    condition: -f ${TRAVIS_BUILD_DIR}/.ci/bintray.json
   user: komet
   key:
     secure: wvecI6fDgvq0bXenVBWzN/Xydgh2qJ9iD9EfHagVGr2EpjCtr7HulUMzeWUV/dxEzyvhMWJ5EhETLb4uAVFaLzrMIxWMvby2sOD6wsSCm+saizqmw/EUWj0GOcn99ULUi0WpjCipNqY24quf7bkhs46o9eVAOisLe7H+KiJct92aCj4Im5YAbxgUbh+bzK3a/fSVf4lTQmamx4dkx3oKe9v71SUdqO+cbuKffebBZnLO8H+jAocgsdK/SYGJtXayYTzIVJwClUOh8aTIRxsELxA8MJ/ByuDzxfCEg+33HzOe0+vgORInePkXexRSummYy5m0z1GXTwgb/Ue2Gw0iUkTRr9lBYXWc0ObEdz0traitWfuqnR2PwNeELlHL6EBTpA1Rdl4NBR1ZLEX/E0BpU0bALT8goqpFaSe2ocLd6e0iHaJ0Evs4s8uX4NsbpE9V+zJxmSFBFv5FZJXhDvah5w9FNs9GSMXwaKMZg1WRHRa94RzSmuYWfRi4DfXF3hgCxwiXW6Vp3myDdHsAumGJsCJNxF7gVVqvnpUQ9Ox4z0fKPgNELZyKlSc4lt/TjuKQ+dFr7QdgbvUl1IO+T/Uzi8jGP2wgzCgJ75qh4rtgdhiIWIhAOhJyS+prw2CAUhAnO0iwOQa9ZcYapVqsGZ+7FWzXtEdxVX3Tx0vc5DpgaM4=
-  file: ${TRAVIS_BUILD_DIR}/travis-ci/bintray.json
+  file: ${TRAVIS_BUILD_DIR}/.ci/bintray.json

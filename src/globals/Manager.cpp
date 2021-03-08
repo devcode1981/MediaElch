@@ -17,6 +17,8 @@
 
 Manager::Manager(QObject* parent) : QObject(parent)
 {
+    using namespace mediaelch::scraper;
+
     m_scraperManager = new mediaelch::ScraperManager(this);
 
     m_movieFileSearcher = new mediaelch::MovieFileSearcher(this);
@@ -43,13 +45,6 @@ Manager::Manager(QObject* parent) : QObject(parent)
 
     m_iconFont = new MyIconFont(this);
     m_iconFont->initFontAwesome();
-
-    qRegisterMetaType<Image*>("Image*");
-    qRegisterMetaType<ImageModel*>("ImageModel*");
-    qRegisterMetaType<ImageProxyModel*>("ImageProxyModel*");
-    qRegisterMetaType<Album*>("Album*");
-    qRegisterMetaType<Artist*>("Artist*");
-    qRegisterMetaType<MusicModelItem*>("MusicModelItem*");
 }
 
 Manager* Manager::instance()
@@ -159,25 +154,25 @@ MusicModel* Manager::musicModel()
  * \param type Type of image
  * \return List of pointers of image providers
  */
-QVector<ImageProviderInterface*> Manager::imageProviders(ImageType type)
+QVector<mediaelch::scraper::ImageProvider*> Manager::imageProviders(ImageType type)
 {
-    QVector<ImageProviderInterface*> providers;
-    for (auto provider : m_imageProviders) {
-        if (provider->provides().contains(type)) {
+    QVector<mediaelch::scraper::ImageProvider*> providers;
+    for (auto* provider : asConst(m_imageProviders)) {
+        if (provider->meta().supportedImageTypes.contains(type)) {
             providers.append(provider);
         }
     }
     return providers;
 }
 
-QVector<ImageProviderInterface*> Manager::imageProviders()
+QVector<mediaelch::scraper::ImageProvider*> Manager::imageProviders()
 {
     return m_imageProviders;
 }
 
-FanartTv* Manager::fanartTv()
+mediaelch::scraper::FanartTv* Manager::fanartTv()
 {
-    return dynamic_cast<FanartTv*>(m_imageProviders.at(0));
+    return dynamic_cast<mediaelch::scraper::FanartTv*>(m_imageProviders.at(0));
 }
 
 Database* Manager::database()
@@ -215,7 +210,7 @@ void Manager::setFileScannerDialog(FileScannerDialog* dialog)
     m_fileScannerDialog = dialog;
 }
 
-QVector<TrailerProvider*> Manager::trailerProviders()
+QVector<mediaelch::scraper::TrailerProvider*> Manager::trailerProviders()
 {
     return m_trailerProviders;
 }

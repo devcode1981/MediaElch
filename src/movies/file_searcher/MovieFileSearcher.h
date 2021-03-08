@@ -1,8 +1,10 @@
 #pragma once
 
+#include "globals/Meta.h"
 #include "movies/Movie.h"
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QObject>
 #include <QTime>
@@ -10,6 +12,8 @@
 #include <memory>
 
 namespace mediaelch {
+
+class MovieDirectorySearcher;
 
 /// \brief Class responsible for (re-)loading all movies inside given directories.
 ///
@@ -37,8 +41,9 @@ public:
     /// \param contents List of contents
     /// \param separateFolders Are concerts in separate folders
     /// \param firstScan When this is true, subfolders are scanned, regardless of separateFolders
-    /// \deprecated
-    Q_DECL_DEPRECATED void scanDir(QString startPath,
+    /// \deprecated Use reload() instead
+    /// \note Only used in MovieFilesOrganizer
+    ELCH_DEPRECATED void scanDir(QString startPath,
         QString path,
         QVector<QStringList>& contents,
         bool separateFolders = false,
@@ -50,38 +55,40 @@ public slots:
 
 signals:
     void searchStarted(QString);
-    void progress(int, int, int);
+    void progress(int current, int max, int messageBarId);
     void moviesLoaded();
     void currentDir(QString);
 
+public:
+    static void loadMovieData(Movie* movie);
+
+private slots:
+    void onDirectoryLoaded(MovieDirectorySearcher* searcher);
+    void onDirectoryStartsLoading(int approximateMovieCount);
+    void onMovieProcessed(Movie* movie);
+
 private:
-    struct MovieContents
-    {
-        QString path;
-        bool inSeparateFolder;
-        QMap<QString, QStringList> contents;
-    };
+    /// \brief Resets all counters, internal variables and so on.
+    void resetInternalState();
 
-    static Movie* loadMovieData(Movie* movie);
+    /// Get a list of files in a directory
+    /// \deprecated Remove with scanDir
+    ELCH_DEPRECATED QStringList getFiles(QString path);
 
-    QStringList getFiles(QString path);
-
-    int loadMoviesFromDirectory(const SettingsDir& movieDir,
-        bool force,
-        QVector<MovieContents>& moviesContent,
-        QVector<Movie*>& dbMovies,
-        QStringList& bluRays,
-        QStringList& dvds);
-    QVector<Movie*> loadAndStoreMoviesContents(QVector<MovieContents>& moviesContent,
-        QStringList& bluRays,
-        QStringList& dvds,
-        int& movieSum,
-        int& movieCounter);
-
+private:
     QVector<SettingsDir> m_directories;
-    int m_progressMessageId;
-    QHash<QString, QDateTime> m_lastModifications;
-    bool m_aborted;
+    QVector<MovieDirectorySearcher*> m_searchers;
+    QElapsedTimer m_reloadTimer;
+
+    /// \deprecated Remove with scanDir
+    ELCH_DEPRECATED QHash<QString, QDateTime> m_lastModifications;
+
+    int m_approxMovieSum = 0;
+    int m_moviesProcessed = 0;
+    int m_directoriesProcessed = 0;
+
+    bool m_running = false;
+    bool m_aborted = false;
 };
 
 } // namespace mediaelch

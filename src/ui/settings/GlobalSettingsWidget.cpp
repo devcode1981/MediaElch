@@ -55,12 +55,19 @@ void GlobalSettingsWidget::setSettings(Settings& settings)
 
 void GlobalSettingsWidget::chooseDirToAdd()
 {
-    QDir path(QFileDialog::getExistingDirectory(
-        this, tr("Choose a directory containing your movies, TV show or concerts"), QDir::homePath()));
+    QString dir = QFileDialog::getExistingDirectory(
+        this, tr("Choose a directory containing your movies, TV show or concerts"), QDir::homePath());
+    if (dir.isEmpty()) {
+        // User aborted file dialog.
+        return;
+    }
+    QDir path(dir);
     if (path.isReadable()) {
-        SettingsDir dir;
-        dir.path = path;
-        addDir(dir);
+        SettingsDir settingsDir;
+        settingsDir.path = path;
+        // A lot of users store their movies in separate folders.  Therefore, we set it per default.
+        settingsDir.separateFolders = true;
+        addDir(settingsDir);
     }
 }
 
@@ -108,7 +115,7 @@ void GlobalSettingsWidget::loadSettings()
     dirListRowChanged(ui->dirs->currentRow());
 
     // Exclude words
-    ui->excludeWordsText->setPlainText(m_settings->excludeWords());
+    ui->excludeWordsText->setPlainText(m_settings->excludeWords().join(","));
 
     ui->useYoutubePluginUrls->setChecked(m_settings->useYoutubePluginUrls());
 }
@@ -173,10 +180,10 @@ void GlobalSettingsWidget::addDir(SettingsDir directory, SettingsDirType dirType
         if (!exists) {
             int row = ui->dirs->rowCount();
             ui->dirs->insertRow(row);
-            auto item = new QTableWidgetItem(dir);
+            auto* item = new QTableWidgetItem(dir);
             item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable);
             item->setToolTip(dir);
-            auto itemCheck = new QTableWidgetItem();
+            auto* itemCheck = new QTableWidgetItem();
             itemCheck->setCheckState(directory.separateFolders ? Qt::Checked : Qt::Unchecked);
 
             auto* itemCheckReload = new QTableWidgetItem();
@@ -225,7 +232,7 @@ void GlobalSettingsWidget::removeDir()
 
 void GlobalSettingsWidget::organize()
 {
-    auto organizer = new MovieFilesOrganizer(this);
+    auto* organizer = new MovieFilesOrganizer(this);
 
     int row = ui->dirs->currentRow();
     if (dynamic_cast<QComboBox*>(ui->dirs->cellWidget(row, 0))->currentIndex() != 0
@@ -253,7 +260,7 @@ void GlobalSettingsWidget::organize()
         organizer->moveToDirs(ui->dirs->item(ui->dirs->currentRow(), 1)->text());
         ui->dirs->item(ui->dirs->currentRow(), 2)->setCheckState(Qt::Checked);
         break;
-    case QMessageBox::Cancel: break;
+    case QMessageBox::Cancel:
     default: break;
     }
 }

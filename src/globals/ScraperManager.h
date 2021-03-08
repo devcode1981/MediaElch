@@ -6,11 +6,16 @@
 #include <QString>
 #include <QVector>
 
-class MovieScraperInterface;
-class ConcertScraperInterface;
-class MusicScraperInterface;
-class MovieScraperInterface;
-class TvScraperInterface;
+namespace mediaelch {
+namespace scraper {
+
+class MusicScraper;
+class ConcertScraper;
+class TvScraper;
+class MovieScraper;
+
+} // namespace scraper
+} // namespace mediaelch
 
 namespace mediaelch {
 
@@ -22,15 +27,16 @@ public:
     explicit ScraperManager(QObject* parent = nullptr);
     ~ScraperManager() override = default;
 
-    ELCH_NODISCARD const QVector<MovieScraperInterface*>& movieScrapers();
-    ELCH_NODISCARD const QVector<TvScraperInterface*>& tvScrapers();
-    ELCH_NODISCARD const QVector<ConcertScraperInterface*>& concertScrapers();
-    ELCH_NODISCARD const QVector<MusicScraperInterface*>& musicScrapers();
+    ELCH_NODISCARD const QVector<mediaelch::scraper::MovieScraper*>& movieScrapers();
+    ELCH_NODISCARD const QVector<mediaelch::scraper::TvScraper*>& tvScrapers();
+    ELCH_NODISCARD const QVector<mediaelch::scraper::ConcertScraper*>& concertScrapers();
+    ELCH_NODISCARD const QVector<mediaelch::scraper::MusicScraper*>& musicScrapers();
 
-    ELCH_NODISCARD MovieScraperInterface* movieScraper(const QString& identifier);
-    ELCH_NODISCARD TvScraperInterface* tvScraper(const QString& identifier);
+    ELCH_NODISCARD mediaelch::scraper::MovieScraper* movieScraper(const QString& identifier);
+    ELCH_NODISCARD mediaelch::scraper::ConcertScraper* concertScraper(const QString& identifier);
+    ELCH_NODISCARD mediaelch::scraper::TvScraper* tvScraper(const QString& identifier);
 
-    static ELCH_NODISCARD QVector<MovieScraperInterface*> constructNativeScrapers(QObject* scraperParent);
+    static ELCH_NODISCARD QVector<mediaelch::scraper::MovieScraper*> constructNativeScrapers(QObject* scraperParent);
 
 private:
     void initMovieScrapers();
@@ -39,10 +45,10 @@ private:
     void initMusicScrapers();
 
 private:
-    QVector<MovieScraperInterface*> m_movieScrapers;
-    QVector<TvScraperInterface*> m_tvScrapers;
-    QVector<ConcertScraperInterface*> m_concertScrapers;
-    QVector<MusicScraperInterface*> m_musicScrapers;
+    QVector<mediaelch::scraper::MovieScraper*> m_movieScrapers;
+    QVector<mediaelch::scraper::TvScraper*> m_tvScrapers;
+    QVector<mediaelch::scraper::ConcertScraper*> m_concertScrapers;
+    QVector<mediaelch::scraper::MusicScraper*> m_musicScrapers;
 };
 
 } // namespace mediaelch

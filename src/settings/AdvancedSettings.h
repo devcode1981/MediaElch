@@ -78,6 +78,7 @@ public:
     QString logFile() const;
     QLocale locale() const;
     QStringList sortTokens() const;
+    QString customStylesheet() const;
     QHash<QString, QString> genreMappings() const;
 
     const mediaelch::FileFilter& movieFilters() const;
@@ -105,13 +106,14 @@ public:
     friend QDebug operator<<(QDebug dbg, const AdvancedSettings& settings);
 
 private:
-    void setLocale(const QString& locale);
+    void setLocale(QString locale);
 
 private:
     bool m_debugLog = false;
     QString m_logFile;
     QLocale m_locale;
     QStringList m_sortTokens;
+    QString m_customStylesheet;
     QHash<QString, QString> m_genreMappings;
     mediaelch::FileFilter m_movieFilters;
     mediaelch::FileFilter m_concertFilters;

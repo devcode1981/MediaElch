@@ -6,29 +6,27 @@
 
 #include "concerts/Concert.h"
 #include "data/ImageCache.h"
+#include "file/NameFormatter.h"
 #include "globals/DownloadManager.h"
 #include "globals/Helper.h"
 #include "globals/Manager.h"
-#include "globals/NameFormatter.h"
 #include "media_centers/MediaCenterInterface.h"
-#include "scrapers/concert/ConcertScraperInterface.h"
+#include "scrapers/concert/ConcertScraper.h"
 #include "settings/Settings.h"
 
 ConcertController::ConcertController(Concert* parent) :
-    QObject(parent),
-    m_concert{parent},
-    m_infoLoaded{false},
-    m_infoFromNfoLoaded{false},
-    m_downloadManager{new DownloadManager(this)},
-    m_downloadsInProgress{false},
-    m_downloadsSize{0}
+    QObject(parent), m_concert{parent}, m_downloadManager{new DownloadManager(this)}
 {
-    connect(m_downloadManager, &DownloadManager::sigDownloadFinished, this, &ConcertController::onDownloadFinished);
+    connect(m_downloadManager,
+        &DownloadManager::sigDownloadFinished,
+        this,
+        &ConcertController::onDownloadFinished,
+        static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
     connect(m_downloadManager,
         &DownloadManager::allConcertDownloadsFinished,
         this,
         &ConcertController::onAllDownloadsFinished,
-        Qt::UniqueConnection);
+        static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
 }
 
 Concert* ConcertController::concert()
@@ -60,9 +58,9 @@ bool ConcertController::loadData(MediaCenterInterface* mediaCenterInterface, boo
     }
 
     m_concert->blockSignals(true);
-    NameFormatter nameFormatter;
+    NameFormatter nameFormatter(Settings::instance()->excludeWords());
 
-    bool infoLoaded;
+    bool infoLoaded = false;
     if (reloadFromNfo) {
         infoLoaded = mediaCenterInterface->loadConcert(m_concert);
     } else {
@@ -79,7 +77,7 @@ bool ConcertController::loadData(MediaCenterInterface* mediaCenterInterface, boo
                     pathElements.removeLast();
                 }
                 if (!pathElements.isEmpty()) {
-                    m_concert->setName(nameFormatter.formatName(pathElements.last()));
+                    m_concert->setTitle(nameFormatter.formatName(pathElements.last()));
                 }
             } else if (QString::compare(fi.fileName(), "index.bdmv", Qt::CaseInsensitive) == 0) {
                 QStringList pathElements = QDir::toNativeSeparators(fi.path()).split(QDir::separator());
@@ -88,24 +86,24 @@ bool ConcertController::loadData(MediaCenterInterface* mediaCenterInterface, boo
                     pathElements.removeLast();
                 }
                 if (!pathElements.isEmpty()) {
-                    m_concert->setName(nameFormatter.formatName(pathElements.last()));
+                    m_concert->setTitle(nameFormatter.formatName(pathElements.last()));
                 }
             } else if (m_concert->inSeparateFolder()) {
                 QStringList splitted = QDir::toNativeSeparators(fi.path()).split(QDir::separator());
                 if (!splitted.isEmpty()) {
-                    m_concert->setName(nameFormatter.formatName(splitted.last()));
+                    m_concert->setTitle(nameFormatter.formatName(splitted.last()));
                 } else {
                     if (m_concert->files().size() > 1) {
-                        m_concert->setName(nameFormatter.formatName(nameFormatter.formatParts(fi.completeBaseName())));
+                        m_concert->setTitle(nameFormatter.formatName(nameFormatter.removeParts(fi.completeBaseName())));
                     } else {
-                        m_concert->setName(nameFormatter.formatName(fi.completeBaseName()));
+                        m_concert->setTitle(nameFormatter.formatName(fi.completeBaseName()));
                     }
                 }
             } else {
                 if (m_concert->files().size() > 1) {
-                    m_concert->setName(nameFormatter.formatName(nameFormatter.formatParts(fi.completeBaseName())));
+                    m_concert->setTitle(nameFormatter.formatName(nameFormatter.removeParts(fi.completeBaseName())));
                 } else {
-                    m_concert->setName(nameFormatter.formatName(fi.completeBaseName()));
+                    m_concert->setTitle(nameFormatter.formatName(fi.completeBaseName()));
                 }
             }
         }
@@ -118,7 +116,9 @@ bool ConcertController::loadData(MediaCenterInterface* mediaCenterInterface, boo
     return infoLoaded;
 }
 
-void ConcertController::loadData(TmdbId id, ConcertScraperInterface* scraperInterface, QSet<ConcertScraperInfo> infos)
+void ConcertController::loadData(TmdbId id,
+    mediaelch::scraper::ConcertScraper* scraperInterface,
+    QSet<ConcertScraperInfo> infos)
 {
     m_infosToLoad = infos;
     scraperInterface->loadData(id, m_concert, infos);
@@ -145,7 +145,7 @@ void ConcertController::setInfosToLoad(QSet<ConcertScraperInfo> infos)
     m_infosToLoad = infos;
 }
 
-void ConcertController::scraperLoadDone(ConcertScraperInterface* scraper)
+void ConcertController::scraperLoadDone(mediaelch::scraper::ConcertScraper* scraper)
 {
     Q_UNUSED(scraper);
 
@@ -153,7 +153,7 @@ void ConcertController::scraperLoadDone(ConcertScraperInterface* scraper)
     if (m_concert->tmdbId().isValid() && infosToLoad().contains(ConcertScraperInfo::ExtraArts)) {
         QVector<ImageType> images{ImageType::ConcertCdArt, ImageType::ConcertClearArt, ImageType::ConcertLogo};
         connect(Manager::instance()->fanartTv(),
-            &ImageProviderInterface::sigConcertImagesLoaded,
+            &mediaelch::scraper::ImageProvider::sigConcertImagesLoaded,
             this,
             &ConcertController::onFanartLoadDone,
             Qt::UniqueConnection);

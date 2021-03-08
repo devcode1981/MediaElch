@@ -2,190 +2,113 @@
 
 #include "globals/Helper.h"
 #include "network/NetworkRequest.h"
-#include "scrapers/movie/IMDB.h"
+#include "scrapers/imdb/ImdbApi.h"
+#include "scrapers/movie/imdb/ImdbMovie.h"
+
+#include <QRegularExpression>
+
+namespace mediaelch {
+namespace scraper {
 
 void ImdbMovieLoader::load()
 {
     m_movie.clear(m_infos);
-    m_movie.setId(ImdbId(m_imdbId));
+    m_movie.setImdbId(m_imdbId);
 
-    QUrl url = QUrl(QString("https://www.imdb.com/title/%1/").arg(m_imdbId).toUtf8());
-    QNetworkRequest request = mediaelch::network::requestWithDefaults(url);
-    request.setRawHeader("Accept-Language", "en");
-    QNetworkReply* reply = m_network.getWithWatcher(request);
-    connect(reply, &QNetworkReply::finished, this, &ImdbMovieLoader::onLoadFinished);
-}
+    m_api.loadMovie(Locale("en"), m_imdbId, [this](QString html, ScraperError error) {
+        if (error.hasError()) {
+            // TODO
+            m_scraper.showNetworkError(error);
+            emit sigLoadDone(m_movie, this);
+            return;
+        }
 
-void ImdbMovieLoader::onLoadFinished()
-{
-    auto* reply = dynamic_cast<QNetworkReply*>(QObject::sender());
-    if (reply == nullptr) {
-        qCritical() << "[ImdbMovieLoader] onLoadFinished: reply was nullptr; Please report!";
-        emit sigLoadDone(m_movie, this);
-        return;
-    }
-
-    reply->deleteLater();
-
-    if (reply->error() != QNetworkReply::NoError) {
-        m_scraper.showNetworkError(*reply);
-        qWarning() << "Network Error (load)" << reply->errorString();
-        emit sigLoadDone(m_movie, this);
-        return;
-    }
-
-    QUrl posterViewerUrl;
-    {
-        const QString html = QString::fromUtf8(reply->readAll());
-        posterViewerUrl = parsePoster(html);
+        QUrl posterViewerUrl = parsePosterViewerUrl(html);
         parseAndAssignInfos(html);
         parseAndStoreActors(html);
-    }
 
-    const bool shouldLoadPoster = m_infos.contains(MovieScraperInfo::Poster) && !posterViewerUrl.isEmpty();
-    const bool shouldLoadTags = m_infos.contains(MovieScraperInfo::Tags) && m_loadAllTags;
-    const bool shouldLoadActors = m_infos.contains(MovieScraperInfo::Actors) && !m_actorUrls.isEmpty();
+        const bool shouldLoadPoster = m_infos.contains(MovieScraperInfo::Poster) && posterViewerUrl.isValid();
+        const bool shouldLoadTags = m_infos.contains(MovieScraperInfo::Tags) && m_loadAllTags;
+        const bool shouldLoadActors = m_infos.contains(MovieScraperInfo::Actors) && !m_actorUrls.isEmpty();
 
-    { // How many pages do we have to download? Count them.
-        QMutexLocker locker(&m_mutex);
-        m_itemsLeftToDownloads = 1;
+        { // How many pages do we have to download? Count them.
+            m_itemsLeftToDownloads = 1;
+            if (shouldLoadPoster) {
+                ++m_itemsLeftToDownloads;
+            }
+            // IMDb has an extra page listing all tags (popular movies can have more than 100 tags).
+            if (shouldLoadTags) {
+                ++m_itemsLeftToDownloads;
+            }
+            if (shouldLoadActors) {
+                m_itemsLeftToDownloads += m_actorUrls.size();
+            }
+        }
 
         if (shouldLoadPoster) {
-            ++m_itemsLeftToDownloads;
+            loadPoster(posterViewerUrl);
         }
-        // IMDb has an extra page listing all tags (popular movies can have more than 100 tags).
         if (shouldLoadTags) {
-            ++m_itemsLeftToDownloads;
+            loadTags();
         }
         if (shouldLoadActors) {
-            m_itemsLeftToDownloads += m_actorUrls.size();
+            loadActorImageUrls();
         }
-    }
-
-    if (shouldLoadPoster) {
-        loadPoster(posterViewerUrl);
-    }
-    if (shouldLoadTags) {
-        loadTags();
-    }
-    if (shouldLoadActors) {
-        loadActorImageUrls();
-    }
-    // It's possible that none of the above items should be loaded.
-    decreaseDownloadCount();
+        // It's possible that none of the above items should be loaded.
+        decreaseDownloadCount();
+    });
 }
 
 
 void ImdbMovieLoader::loadPoster(const QUrl& posterViewerUrl)
 {
     qDebug() << "[ImdbMovieLoader] Loading movie poster detail view";
-    auto request = mediaelch::network::requestWithDefaults(posterViewerUrl);
-    QNetworkReply* posterReply = m_network.getWithWatcher(request);
-    connect(posterReply, &QNetworkReply::finished, this, &ImdbMovieLoader::onPosterLoadFinished);
+    m_api.sendGetRequest(Locale("en"), posterViewerUrl, [this](QString html, ScraperError error) {
+        if (!error.hasError()) {
+            parseAndAssignPoster(html);
+
+        } else {
+            // TODO
+            m_scraper.showNetworkError(error);
+        }
+        decreaseDownloadCount();
+    });
 }
 
 void ImdbMovieLoader::loadTags()
 {
     QUrl tagsUrl(QStringLiteral("https://www.imdb.com/title/%1/keywords").arg(m_movie.imdbId().toString()));
-    auto request = mediaelch::network::requestWithDefaults(tagsUrl);
-    QNetworkReply* tagsReply = m_network.getWithWatcher(request);
-    connect(tagsReply, &QNetworkReply::finished, this, &ImdbMovieLoader::onTagsFinished);
+    m_api.sendGetRequest(Locale("en"), tagsUrl, [this](QString html, ScraperError error) {
+        if (!error.hasError()) {
+            parseAndAssignTags(html);
+
+        } else {
+            // TODO
+            m_scraper.showNetworkError(error);
+        }
+        decreaseDownloadCount();
+    });
 }
 
 void ImdbMovieLoader::loadActorImageUrls()
 {
     for (int index = 0; index < m_actorUrls.size(); ++index) {
-        auto request = mediaelch::network::requestWithDefaults(m_actorUrls[index].second);
-        // The actor's image should be the same for all languages. So we can
-        // just load the English version of the page.
-        request.setRawHeader("Accept-Language", "en");
-        QNetworkReply* reply = m_network.getWithWatcher(request);
-        reply->setProperty("actorIndex", QVariant(index));
-        connect(reply, &QNetworkReply::finished, this, &ImdbMovieLoader::onActorImageUrlLoadDone);
+        m_api.sendGetRequest(
+            Locale("en"), m_actorUrls[index].second, [actorIndex = index, this](QString html, ScraperError error) {
+                if (error.hasError()) {
+                    // TODO
+                    m_scraper.showNetworkError(error);
+                    decreaseDownloadCount();
+                    return;
+                }
+
+                QString url = parseActorImageUrl(html);
+                if (!url.isEmpty()) {
+                    m_actorUrls[actorIndex].first.thumb = url;
+                }
+                decreaseDownloadCount();
+            });
     }
-}
-
-void ImdbMovieLoader::onPosterLoadFinished()
-{
-    auto* reply = dynamic_cast<QNetworkReply*>(QObject::sender());
-    if (reply == nullptr) {
-        qCritical() << "[ImdbMovieLoader] onPosterLoadFinished: reply was nullptr; Please report!";
-        decreaseDownloadCount();
-        return;
-    }
-    reply->deleteLater();
-
-    if (reply->error() == QNetworkReply::NoError) {
-        const QString posterId = reply->url().fileName();
-        const QString html = QString::fromUtf8(reply->readAll());
-        parseAndAssignPoster(html, posterId);
-
-    } else {
-        m_scraper.showNetworkError(*reply);
-        qWarning() << "[ImdbMovieLoader] Network Error (load poster)" << reply->errorString();
-    }
-    decreaseDownloadCount();
-}
-
-void ImdbMovieLoader::onTagsFinished()
-{
-    auto* reply = dynamic_cast<QNetworkReply*>(QObject::sender());
-    if (reply == nullptr) {
-        qCritical() << "[ImdbMovieLoader] onTagsFinished: reply was nullptr; Please report!";
-        decreaseDownloadCount();
-        return;
-    }
-    reply->deleteLater();
-
-    if (reply->error() == QNetworkReply::NoError) {
-        const QString html = QString::fromUtf8(reply->readAll());
-        parseAndAssignTags(html);
-
-    } else {
-        m_scraper.showNetworkError(*reply);
-        qWarning() << "[ImdbMovieLoader] Network Error (load tags)" << reply->errorString();
-    }
-    decreaseDownloadCount();
-}
-
-void ImdbMovieLoader::onActorImageUrlLoadDone()
-{
-    auto* reply = dynamic_cast<QNetworkReply*>(QObject::sender());
-    if (reply == nullptr) {
-        qCritical() << "[ImdbMovieLoader] onActorImageUrlLoadDone: reply was nullptr; Please report!";
-        decreaseDownloadCount();
-        return;
-    }
-    reply->deleteLater();
-
-    bool ok = false;
-    const int actorIndex = reply->property("actorIndex").toInt(&ok);
-
-    if (!ok) {
-        qCritical() << "[ImdbMovieLoader] onActorImageUrlLoadDone: Cannot get actor index; Please report!";
-        decreaseDownloadCount();
-        return;
-    }
-
-    if (actorIndex < 0 || actorIndex >= m_actorUrls.size()) {
-        qCritical() << "[ImdbMovieLoader] onActorImageUrlLoadDone: Actor index out of bounds; Please report!";
-        decreaseDownloadCount();
-        return;
-    }
-
-    if (reply->error() != QNetworkReply::NoError) {
-        m_scraper.showNetworkError(*reply);
-        qWarning() << "[ImdbMovieLoader] Network Error (load poster)" << reply->errorString();
-        decreaseDownloadCount();
-        return;
-    }
-
-    const QString html = QString::fromUtf8(reply->readAll());
-    QString url = parseActorImageUrl(html);
-    if (!url.isEmpty()) {
-        m_actorUrls[actorIndex].first.thumb = url;
-    }
-    decreaseDownloadCount();
 }
 
 void ImdbMovieLoader::parseAndAssignInfos(const QString& html)
@@ -195,50 +118,53 @@ void ImdbMovieLoader::parseAndAssignInfos(const QString& html)
 
 void ImdbMovieLoader::parseAndStoreActors(const QString& html)
 {
-    QRegExp rx;
-    rx.setMinimal(true);
-    rx.setPattern("<table class=\"cast_list\">(.*)</table>");
-    if (rx.indexIn(html) == -1) {
+    QRegularExpression rx("<table class=\"cast_list\">(.*)</table>",
+        QRegularExpression::DotMatchesEverythingOption | QRegularExpression::InvertedGreedinessOption);
+    QRegularExpressionMatch match = rx.match(html);
+    if (!match.hasMatch()) {
         return;
     }
 
-    QString content = rx.cap(1);
+    QString content = match.captured(1);
     rx.setPattern(R"(<tr class="[^"]*">(.*)</tr>)");
-    int pos = 0;
-    while ((pos = rx.indexIn(content, pos)) != -1) {
-        QString actorHtml = rx.cap(1);
-        pos += rx.matchedLength();
+
+    QRegularExpressionMatchIterator actorRowsMatch = rx.globalMatch(content);
+
+    while (actorRowsMatch.hasNext()) {
+        QString actorHtml = actorRowsMatch.next().captured(1);
 
         QPair<Actor, QUrl> actorUrl;
 
-        QRegExp rxName(R"re(<a href="(/name/[^"]+)"\n *>([^<]*)</a>)re");
-        rxName.setMinimal(true);
-        if (rxName.indexIn(actorHtml) != -1) {
-            actorUrl.second = QUrl("https://www.imdb.com" + rxName.cap(1));
-            actorUrl.first.name = rxName.cap(2).trimmed();
+        rx.setPattern(R"re(<a href="(/name/[^"]+)"\n\s*>([^<]*)</a>)re");
+        match = rx.match(actorHtml);
+        if (match.hasMatch()) {
+            actorUrl.second = QUrl("https://www.imdb.com" + match.captured(1));
+            actorUrl.first.name = match.captured(2).trimmed();
         }
 
-        QRegExp rxRole(R"(<td class="character">\n *(.*)</td>)");
-        rxRole.setMinimal(true);
-        if (rxRole.indexIn(actorHtml) != -1) {
-            QString role = rxRole.cap(1);
-            rxRole.setPattern(R"(<a href="[^"]*" >([^<]*)</a>)");
-            if (rxRole.indexIn(role) != -1) {
-                role = rxRole.cap(1);
+        rx.setPattern(R"(<td class="character">\n\s*(.*)</td>)");
+        match = rx.match(actorHtml);
+        if (match.hasMatch()) {
+            QString role = match.captured(1);
+            rx.setPattern(R"(<a href="[^"]*" >([^<]*)</a>)");
+            match = rx.match(role);
+            if (match.hasMatch()) {
+                role = match.captured(1);
             }
-            actorUrl.first.role = role.trimmed().replace(QRegExp("[\\s\\n]+"), " ");
+            actorUrl.first.role = role.trimmed().replace(QRegularExpression("[\\s\\n]+"), " ");
         }
 
-        QRegExp rxImg("<img [^<]*loadlate=\"([^\"]*)\"[^<]* />");
-        rxImg.setMinimal(true);
-        if (rxImg.indexIn(actorHtml) != -1) {
-            QString img = rxImg.cap(1);
-            QRegExp aRx1("https://ia.media-imdb.com/images/(.*)/(.*)._V(.*).jpg");
-            aRx1.setMinimal(true);
-            if (aRx1.indexIn(img) != -1) {
-                actorUrl.first.thumb = "https://ia.media-imdb.com/images/" + aRx1.cap(1) + "/" + aRx1.cap(2) + ".jpg";
+        rx.setPattern("<img [^<]*loadlate=\"([^\"]*)\"[^<]* />");
+        match = rx.match(actorHtml);
+        if (match.hasMatch()) {
+            QString img = match.captured(1);
+            rx.setPattern("https://ia.media-imdb.com/images/(.*)/(.*)._V(.*).jpg");
+            match = rx.match(img);
+            if (match.hasMatch()) {
+                actorUrl.first.thumb =
+                    "https://ia.media-imdb.com/images/" + match.captured(1) + "/" + match.captured(2) + ".jpg";
             } else {
-                actorUrl.first.thumb = rxImg.cap(1);
+                actorUrl.first.thumb = match.captured(1);
             }
         }
 
@@ -247,49 +173,53 @@ void ImdbMovieLoader::parseAndStoreActors(const QString& html)
     }
 }
 
-QUrl ImdbMovieLoader::parsePoster(const QString& html)
+QUrl ImdbMovieLoader::parsePosterViewerUrl(const QString& html)
 {
-    QRegExp rx("<div class=\"poster\">(.*)</div>");
-    rx.setMinimal(true);
-    if (rx.indexIn(html) == -1) {
+    QRegularExpression rx("<div class=\"poster\">(.*)</div>",
+        QRegularExpression::DotMatchesEverythingOption | QRegularExpression::InvertedGreedinessOption);
+    QRegularExpressionMatch match = rx.match(html);
+    if (!match.hasMatch()) {
         return QUrl();
     }
 
-    QString content = rx.cap(1);
-    rx.setPattern("<a href=\"/title/tt([^\"]*)\"[^>]*>");
-    if (rx.indexIn(content) == -1) {
+    const QString content = match.captured(1);
+    rx.setPattern("<a href=\"/title/(tt[^\"]*)\"");
+    match = rx.match(content);
+    if (!match.hasMatch()) {
         return QUrl();
     }
 
-    return QString("https://www.imdb.com/title/tt%1").arg(rx.cap(1));
+    return QStringLiteral("https://www.imdb.com/title/%1").arg(match.captured(1));
 }
 
 void ImdbMovieLoader::parseAndAssignTags(const QString& html)
 {
-    QRegExp rx;
-    rx.setMinimal(true);
+    QRegularExpression rx;
+    rx.setPatternOptions(QRegularExpression::DotMatchesEverythingOption | QRegularExpression::InvertedGreedinessOption);
     if (m_loadAllTags) {
         rx.setPattern(R"(<a href="/search/keyword[^"]+"\n?>([^<]+)</a>)");
     } else {
         rx.setPattern(R"(<a href="/keyword/[^"]+"[^>]*>([^<]+)</a>)");
     }
 
-    int pos = 0;
-    while ((pos = rx.indexIn(html, pos)) != -1) {
-        m_movie.addTag(rx.cap(1).trimmed());
-        pos += rx.matchedLength();
+
+    QRegularExpressionMatchIterator match = rx.globalMatch(html);
+    while (match.hasNext()) {
+        m_movie.addTag(match.next().captured(1).trimmed());
     }
 }
 
 QString ImdbMovieLoader::parseActorImageUrl(const QString& html)
 {
-    QRegExp rx(R"re(<link rel=['"]image_src['"] href="([^"]+)">)re");
-    rx.setMinimal(true);
-    if (rx.indexIn(html) == -1) {
+    QRegularExpression rx(R"re(<link rel=['"]image_src['"] href="([^"]+)">)re", //
+        QRegularExpression::InvertedGreedinessOption);
+
+    QRegularExpressionMatch match = rx.match(html);
+    if (!match.hasMatch()) {
         return "";
     }
 
-    return rx.cap(1);
+    return match.captured(1);
 }
 
 void ImdbMovieLoader::mergeActors()
@@ -306,34 +236,29 @@ void ImdbMovieLoader::mergeActors()
     }
 }
 
-void ImdbMovieLoader::parseAndAssignPoster(const QString& html, QString posterId)
+void ImdbMovieLoader::parseAndAssignPoster(const QString& html)
 {
-    // IMDB's media viewer contains all links to the gallery's image files.
-    // We only want the poster, which has the given id.
-    //
-    // Relevant JavaScript example:
-    //   "id":"rm2278496512","h":1000,"msrc":"https://m.media-amazon.com/images/M/<image>.jpg",
-    //   "src":"https://m.media-amazon.com/images/M/<image>.jpg",
-    //
-    QString regex = QStringLiteral(R"url("id":"%1","h":[0-9]+,"msrc":"([^"]+)","src":"([^"]+)")url");
-    QRegExp rx(regex.arg(posterId));
-    rx.setMinimal(true);
+    // There should only be one image like this.
+    QString regex = QStringLiteral(R"url(<img src="(https://m\.media-amazon\.com/[^"]+)" srcSet=")url");
+    QRegularExpression rx(regex, QRegularExpression::InvertedGreedinessOption);
 
-    if (rx.indexIn(html) != -1) {
+    QRegularExpressionMatch match = rx.match(html);
+    if (match.hasMatch()) {
         Poster p;
-        p.thumbUrl = rx.cap(1);
-        p.originalUrl = rx.cap(2);
+        p.thumbUrl = match.captured(1);
+        p.originalUrl = match.captured(1);
         m_movie.images().addPoster(p);
     }
 }
 
 void ImdbMovieLoader::decreaseDownloadCount()
 {
-    QMutexLocker locker(&m_mutex);
     --m_itemsLeftToDownloads;
     if (m_itemsLeftToDownloads == 0) {
-        locker.unlock();
         mergeActors();
         emit sigLoadDone(m_movie, this);
     }
 }
+
+} // namespace scraper
+} // namespace mediaelch

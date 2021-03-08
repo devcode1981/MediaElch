@@ -1,19 +1,20 @@
 #include "test/test_helpers.h"
 
-#include "scrapers/movie/HotMovies.h"
+#include "scrapers/movie/hotmovies/HotMovies.h"
 
 #include <chrono>
 
 using namespace std::chrono_literals;
+using namespace mediaelch::scraper;
 
 /// @brief Loads movie data synchronously
-void loadHotMoviesSync(HotMovies& scraper, QHash<MovieScraperInterface*, QString> ids, Movie& movie)
+static void loadHotMoviesSync(HotMovies& scraper, QHash<MovieScraper*, QString> ids, Movie& movie)
 {
-    const auto infos = scraper.scraperSupports();
+    const auto infos = scraper.meta().supportedDetails;
     loadDataSync(scraper, ids, movie, infos);
 }
 
-TEST_CASE("HotMovies returns valid search results", "[scraper][HotMovies][search]")
+TEST_CASE("HotMovies returns valid search results", "[HotMovies][search]")
 {
     HotMovies HotMovies;
 
@@ -26,7 +27,7 @@ TEST_CASE("HotMovies returns valid search results", "[scraper][HotMovies][search
 }
 
 
-TEST_CASE("HotMovies scrapes correct movie details", "[scraper][HotMovies][load_data]")
+TEST_CASE("HotMovies scrapes correct movie details", "[HotMovies][load_data]")
 {
     HotMovies hm;
 
@@ -45,6 +46,7 @@ TEST_CASE("HotMovies scrapes correct movie details", "[scraper][HotMovies][load_
         // CHECK(m.ratings().back().rating == Approx(4).margin(0.5));
         CHECK(m.ratings().back().voteCount > 50);
         CHECK(m.images().posters().size() == 1);
+        CHECK(m.images().backdrops().size() == 1);
         CHECK(m.runtime() == 201min);
 
         CHECK_THAT(m.overview(), Contains("with a great storyline"));

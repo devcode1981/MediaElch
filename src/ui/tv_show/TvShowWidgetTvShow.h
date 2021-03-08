@@ -47,7 +47,7 @@ private slots:
     void onRemoveTag(QString tag);
     void onAddActor();
     void onRemoveActor();
-    void onInfoLoadDone(TvShow* show, QSet<ShowScraperInfo> details);
+    void onInfoLoadDone(TvShow* show, QSet<ShowScraperInfo> details, mediaelch::Locale locale);
     void onLoadDone(TvShow* show, QMap<ImageType, QVector<Poster>> posters);
 
     void onChooseImage();
@@ -64,12 +64,14 @@ private slots:
     void onArtPageTwo();
     void onDownloadTune();
 
-    void onNameChange(QString text);
+    void onTitleChange(QString text);
+    void onSortTitleChange(QString text);
+    void onOriginalTitleChange(QString text);
     void onImdbIdChange(QString text);
     void onTmdbIdChange(QString text);
     void onTvdbIdChange(QString text);
+    void onTvMazeIdChange(QString text);
     void onStatusChange(int index);
-    void onSortTitleChange(QString text);
     void onCertificationChange(QString text);
     void onRatingChange(double value);
     void onUserRatingChange(double value);

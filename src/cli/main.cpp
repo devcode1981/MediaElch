@@ -4,6 +4,7 @@
 #include "cli/list.h"
 #include "cli/reload.h"
 #include "cli/show.h"
+#include "globals/Meta.h"
 #include "settings/Settings.h"
 
 #include <QApplication>
@@ -68,7 +69,7 @@ const char* const helpMessage = R"(Usage: mediaelch [options] <command> [command
 
 Options:
  -h, --help        Print this help notice. For help on commands, use
-                   `mediaelch <command> --help` to the command.
+                   `mediaelch <command> --help`.
  -v, --version     Print Mediaelch's version.
  --verbose=<level> Verbosity level (0: only errors, 4: everything)
 
@@ -122,10 +123,10 @@ static int parseArguments(QApplication& app)
     case Command::Version: parser.showVersion();
     case Command::List: return mediaelch::cli::list(app, parser);
     case Command::Reload: return mediaelch::cli::reload(app, parser);
+    case Command::Settings:
+    case Command::Sync:
     case Command::Add: printUnsupported(command); return 1;
     case Command::Show: return mediaelch::cli::show(app, parser);
-    case Command::Settings: printUnsupported(command); return 1;
-    case Command::Sync: printUnsupported(command); return 1;
     case Command::Info: return mediaelch::cli::info(app, parser);
     case Command::Unknown:
         // do not process arguments so that we can show our custom help command
@@ -150,6 +151,7 @@ static int parseArguments(QApplication& app)
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
+    registerAllMetaTypes();
 
     QCoreApplication::setOrganizationName(mediaelch::constants::OrganizationName);
     QCoreApplication::setApplicationName(mediaelch::constants::AppName);

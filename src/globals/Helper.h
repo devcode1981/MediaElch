@@ -37,14 +37,16 @@ bool isBluRay(QString path);
 
 QImage& resizeBackdrop(QImage& image, bool& resized);
 QByteArray& resizeBackdrop(QByteArray& image);
-QString& sanitizeFileName(QString& fileName);
-QString stackedBaseName(const QString& fileName);
+void sanitizeFileName(QString& fileName);
+void sanitizeFolderName(QString& fileName);
 QString appendArticle(const QString& text);
+
 QString mapGenre(const QString& text);
 QStringList mapGenre(const QStringList& genres);
 Certification mapCertification(const Certification& certification);
 QString mapStudio(const QString& text);
 QString mapCountry(const QString& text);
+
 QString formatFileSizeBinary(double size, const QLocale& locale);
 QString formatFileSize(double size, const QLocale& locale);
 void removeFocusRect(QWidget* widget);

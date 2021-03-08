@@ -32,12 +32,13 @@ public:
     void showProgressBar(bool show);
     void setProgress(int current, int max);
     void setId(int id);
-    int id();
-    int maxValue();
-    int value();
+    int id() const;
+    int maxValue() const;
+    int value() const;
 
 signals:
     void sigHideMessage(int);
+
 private slots:
     void timeout();
 

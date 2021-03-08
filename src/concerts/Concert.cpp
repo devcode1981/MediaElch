@@ -6,8 +6,8 @@
 #include <QFileInfo>
 
 #include "data/StreamDetails.h"
+#include "file/NameFormatter.h"
 #include "globals/Helper.h"
-#include "globals/NameFormatter.h"
 #include "media_centers/MediaCenterInterface.h"
 #include "settings/Settings.h"
 
@@ -20,9 +20,9 @@ using namespace std::chrono_literals;
 Concert::Concert(const mediaelch::FileList& files, QObject* parent) :
     QObject(parent),
     m_controller{new ConcertController(this)},
-    m_downloadsSize{0},
+
     m_hasChanged{false},
-    m_downloadsInProgress{false},
+
     m_inSeparateFolder{false},
     m_streamDetailsLoaded{false},
     m_syncNeeded{false},
@@ -40,7 +40,7 @@ void Concert::setFiles(const mediaelch::FileList& files)
     m_concert.streamDetails = new StreamDetails(this, files);
     if (!files.isEmpty()) {
         QFileInfo fi(files.at(0).toString());
-        QStringList path = fi.path().split("/", QString::SkipEmptyParts);
+        QStringList path = fi.path().split("/", ElchSplitBehavior::SkipEmptyParts);
         m_folderName = path.last();
     }
 }
@@ -133,6 +133,11 @@ void Concert::clear(QSet<ConcertScraperInfo> infos)
     }
 }
 
+QString Concert::originalTitle() const
+{
+    return m_concert.originalTitle;
+}
+
 ConcertController* Concert::controller() const
 {
     return m_controller;
@@ -150,15 +155,9 @@ void Concert::clearImages()
 
 /*** GETTER ***/
 
-/**
- * \property Concert::name
- * \brief Holds the concerts name
- * \return The concerts name
- * \see Concert::setName
- */
-QString Concert::name() const
+QString Concert::title() const
 {
-    return m_concert.name;
+    return m_concert.title;
 }
 
 /**
@@ -482,14 +481,15 @@ QStringList Concert::tags() const
 
 /*** SETTER ***/
 
-/**
- * \brief Sets the concerts name
- * \param name Name of the concert
- * \see Concert::name
- */
-void Concert::setName(QString name)
+void Concert::setTitle(QString title)
 {
-    m_concert.name = std::move(name);
+    m_concert.title = std::move(title);
+    setChanged(true);
+}
+
+void Concert::setOriginalTitle(QString title)
+{
+    m_concert.originalTitle = std::move(title);
     setChanged(true);
 }
 
@@ -846,16 +846,16 @@ QVector<ExtraFanart> Concert::extraFanarts(MediaCenterInterface* mediaCenterInte
     if (m_concert.extraFanarts.isEmpty()) {
         m_concert.extraFanarts = mediaCenterInterface->extraFanartNames(this);
     }
-    for (const QString& file : m_extraFanartsToRemove) {
+    for (const QString& file : asConst(m_extraFanartsToRemove)) {
         m_concert.extraFanarts.removeOne(file);
     }
     QVector<ExtraFanart> fanarts;
-    for (const QString& file : m_concert.extraFanarts) {
+    for (const QString& file : asConst(m_concert.extraFanarts)) {
         ExtraFanart f;
         f.path = file;
         fanarts.append(f);
     }
-    for (const QByteArray& img : m_extraFanartImagesToAdd) {
+    for (const QByteArray& img : asConst(m_extraFanartImagesToAdd)) {
         ExtraFanart f;
         f.image = img;
         fanarts.append(f);
@@ -912,7 +912,7 @@ void Concert::removeImage(ImageType type)
 
 bool Concert::lessThan(Concert* a, Concert* b)
 {
-    return (QString::localeAwareCompare(helper::appendArticle(a->name()), helper::appendArticle(b->name())) < 0);
+    return (QString::localeAwareCompare(helper::appendArticle(a->title()), helper::appendArticle(b->title())) < 0);
 }
 
 QVector<ImageType> Concert::imageTypes()
@@ -924,7 +924,7 @@ QVector<ImageType> Concert::imageTypes()
         ImageType::ConcertBackdrop};
 }
 
-QByteArray Concert::image(ImageType imageType)
+QByteArray Concert::image(ImageType imageType) const
 {
     return m_concert.images.value(imageType, QByteArray());
 }

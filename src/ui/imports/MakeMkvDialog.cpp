@@ -8,7 +8,7 @@
 #include "globals/Helper.h"
 #include "globals/Manager.h"
 #include "renamer/RenamerDialog.h"
-#include "scrapers/movie/CustomMovieScraper.h"
+#include "scrapers/movie/custom/CustomMovieScraper.h"
 #include "ui/notifications/Notificator.h"
 
 MakeMkvDialog::MakeMkvDialog(QWidget* parent) : QDialog(parent), ui(new Ui::MakeMkvDialog)
@@ -226,11 +226,13 @@ void MakeMkvDialog::onImportComplete()
 
 void MakeMkvDialog::onMovieChosen()
 {
-    QHash<MovieScraperInterface*, QString> ids;
+    using namespace mediaelch::scraper;
+
+    QHash<MovieScraper*, QString> ids;
     QSet<MovieScraperInfo> infosToLoad;
-    if (ui->movieSearchWidget->scraperId() == CustomMovieScraper::scraperIdentifier) {
+    if (ui->movieSearchWidget->scraperId() == CustomMovieScraper::ID) {
         ids = ui->movieSearchWidget->customScraperIds();
-        infosToLoad = Settings::instance()->scraperInfos<MovieScraperInfo>(CustomMovieScraper::scraperIdentifier);
+        infosToLoad = Settings::instance()->scraperInfos<MovieScraperInfo>(CustomMovieScraper::ID);
     } else {
         ids.insert(nullptr, ui->movieSearchWidget->scraperMovieId());
         infosToLoad = ui->movieSearchWidget->infosToLoad();
@@ -291,7 +293,7 @@ void MakeMkvDialog::onImport()
         newFolderName.replace("<title>", m_movie->name());
         newFolderName.replace("<originalTitle>", m_movie->originalName());
         newFolderName.replace("<year>", m_movie->released().toString("yyyy"));
-        helper::sanitizeFileName(newFolderName);
+        helper::sanitizeFolderName(newFolderName);
         if (!dir.mkdir(newFolderName)) {
             QMessageBox::warning(this,
                 tr("Creating destination directory failed"),

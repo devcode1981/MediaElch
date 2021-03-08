@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -Eeuo pipefail
 IFS=$'\n\t'
 
-cd "$(dirname "$0")/.."
+# Go to project directory
+cd "$(dirname "${BASH_SOURCE[0]}")/.." > /dev/null 2>&1
+
 source scripts/utils.sh
 
-if [[ -x "$(command -v clang-format-10)" ]]; then
-	CF=clang-format-10
-elif [[ -x "$(command -v clang-format-mp-10)" ]]; then
+if [[ -x "$(command -v clang-format-11)" ]]; then
+	CF=clang-format-11
+elif [[ -x "$(command -v clang-format-mp-11)" ]]; then
 	# MacPorts version
-	CF=clang-format-mp-10
+	CF=clang-format-mp-11
 else
 	CF=clang-format
-	clang-format --version | grep " 10." > /dev/null || ( print_warning "WARNING: MediaElch requires clang-format version 10")
+	clang-format --version | grep " 11." > /dev/null || (print_warning "WARNING: MediaElch requires clang-format version 11")
 fi
 
 print_important "Format all source files using ${CF}"

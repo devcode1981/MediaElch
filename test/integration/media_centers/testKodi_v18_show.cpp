@@ -1,7 +1,7 @@
 #include "test/test_helpers.h"
 
 #include "media_centers/kodi/TvShowXmlReader.h"
-#include "media_centers/kodi/v18/TvShowXmlWriterV18.h"
+#include "media_centers/kodi/TvShowXmlWriter.h"
 #include "test/integration/resource_dir.h"
 #include "tv_shows/TvShow.h"
 
@@ -29,8 +29,8 @@ static void createAndCompareTvShow(const QString& filename, Callback callback)
 
     callback(show);
 
-    mediaelch::kodi::TvShowXmlWriterV18 writer(show);
-    QString actual = writer.getTvShowXml().trimmed();
+    mediaelch::kodi::TvShowXmlWriterGeneric writer(mediaelch::KodiVersion(18), show);
+    QString actual = writer.getTvShowXml(true).trimmed();
     writeTempFile(filename, actual);
     checkSameXml(showContent, actual);
 }
@@ -43,8 +43,8 @@ TEST_CASE("TV show XML writer for Kodi v18", "[data][tvshow][kodi][nfo]")
         QString filename = "show/kodi_v18_show_empty.nfo";
         CAPTURE(filename);
 
-        mediaelch::kodi::TvShowXmlWriterV18 writer(tvShow);
-        QString actual = writer.getTvShowXml().trimmed();
+        mediaelch::kodi::TvShowXmlWriterGeneric writer(mediaelch::KodiVersion(18), tvShow);
+        QString actual = writer.getTvShowXml(true).trimmed();
         writeTempFile(filename, actual);
         checkSameXml(getFileContent(filename), actual);
     }
@@ -57,6 +57,11 @@ TEST_CASE("TV show XML writer for Kodi v18", "[data][tvshow][kodi][nfo]")
             CHECK(show.ratings().first().voteCount == 1783);
             CHECK(show.certification() == Certification("TV-MA"));
             CHECK(show.actors().size() == 80);
+        });
+        createAndCompareTvShow("show/kodi_v18_show_Game_of_Thrones_TvDb_episode_guide.nfo", [](TvShow& show) {
+            CHECK(show.title() == "Game of Thrones");
+            CHECK(show.tvdbId().isValid());
+            CHECK_FALSE(show.tmdbId().isValid());
         });
     }
 
@@ -77,9 +82,11 @@ TEST_CASE("TV show XML writer for Kodi v18", "[data][tvshow][kodi][nfo]")
         show.setTitle("Angel");
         show.setShowTitle("Angel 1");
         show.setSortTitle("TC15");
+        show.setOriginalTitle("Angel 2");
         show.setTvdbId(TvDbId(71035));
         show.setTmdbId(TmdbId(2426));
         show.setImdbId(ImdbId("tt0162065"));
+        show.setTvMazeId(TvMazeId(428));
         {
             Rating rating;
             rating.rating = 8.6;
@@ -130,9 +137,9 @@ TEST_CASE("TV show XML writer for Kodi v18", "[data][tvshow][kodi][nfo]")
             show.addActor(actor);
         }
 
-        mediaelch::kodi::TvShowXmlWriterV18 writer(show);
+        mediaelch::kodi::TvShowXmlWriterGeneric writer(mediaelch::KodiVersion(18), show);
 
-        QString actual = writer.getTvShowXml().trimmed();
+        QString actual = writer.getTvShowXml(true).trimmed();
         QString filename = "show/kodi_v18_show_all.nfo";
         CAPTURE(filename);
         writeTempFile(filename, actual);

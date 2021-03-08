@@ -37,9 +37,12 @@ signals:
     void infoChanged();
 
 private slots:
-    void onConcertNameChanged(QString concertName);
+    void onConcertTitleChanged(QString concertName);
 
-    void onNameChange(QString text);
+    void onTitleChange(QString text);
+    void onOriginalTitleChange(QString text);
+    void onTmdbIdChanged(QString text);
+    void onImdbIdChanged(QString text);
     void onArtistChange(QString text);
     void onAlbumChange(QString text);
     void onTaglineChange(QString text);

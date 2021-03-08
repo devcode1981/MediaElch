@@ -174,6 +174,8 @@ void AdvancedSettingsXmlReader::loadGui()
     while (m_xml.readNextStartElement()) {
         if (m_xml.name() == "forceCache") {
             expectBool(m_settings.m_forceCache);
+        } else if (m_xml.name() == "stylesheet") {
+            m_settings.m_customStylesheet = m_xml.readElementText().trimmed();
         } else {
             skipUnsupportedTag();
         }
@@ -198,7 +200,7 @@ void AdvancedSettingsXmlReader::loadFilters()
     // are appended to a cleared "list".
     const auto appendNextFiltersToList = [&](mediaelch::FileFilter& list) {
         QStringList newFilters;
-        const auto filters = m_xml.readElementText().split(",", QString::SkipEmptyParts);
+        const auto filters = m_xml.readElementText().split(",", ElchSplitBehavior::SkipEmptyParts);
         for (const QString& filter : filters) {
             newFilters << filter.trimmed();
         }

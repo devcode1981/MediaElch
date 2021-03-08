@@ -7,7 +7,9 @@ OS_REV="$(uname -r)"
 OS_MACH="$(uname -m)"
 
 if [ "${OS_NAME}" = "Linux" ]; then
-	 JOBS=$(grep -c '^processor' /proc/cpuinfo)
+	JOBS=$(grep -c '^processor' /proc/cpuinfo)
+elif [ "${OS_NAME}" = 'Darwin' ]; then
+	JOBS=$(sysctl -n hw.logicalcpu)
 else
 	JOBS=2
 fi
@@ -47,7 +49,7 @@ print_error() {
 	printf '%b' "${RED}${1}${NC}\n" 1>&2
 }
 
-print_critical() {
+print_fatal() {
 	printf '%b' "${RED}${1}${NC}\n" 1>&2
 	exit 1
 }

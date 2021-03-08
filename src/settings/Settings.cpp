@@ -1,11 +1,12 @@
 #include "Settings.h"
 
 #include "globals/Manager.h"
+#include "globals/ScraperInfos.h"
 #include "renamer/RenamerDialog.h"
-#include "scrapers/concert/ConcertScraperInterface.h"
-#include "scrapers/movie/MovieScraperInterface.h"
-#include "scrapers/music/MusicScraperInterface.h"
-#include "scrapers/tv_show/TvScraperInterface.h"
+#include "scrapers/concert/ConcertScraper.h"
+#include "scrapers/movie/MovieScraper.h"
+#include "scrapers/music/MusicScraper.h"
+#include "scrapers/tv_show/thetvdb/TheTvDb.h"
 #include "settings/AdvancedSettingsXmlReader.h"
 
 #include <QApplication>
@@ -13,10 +14,69 @@
 #include <QMutex>
 #include <QMutexLocker>
 
+static constexpr char KEY_ALL_DATA_FILES[] = "AllDataFiles";
+static constexpr char KEY_AUTO_LOAD_STREAM_DETAILS[] = "AutoLoadStreamDetails";
+static constexpr char KEY_CHECK_FOR_UPDATES[] = "CheckForUpdates";
+static constexpr char KEY_CUSTOM_MOVIE_SCRAPER[] = "CustomMovieScraper";
+static constexpr char KEY_CUSTOM_TV_SCRAPER_SHOW[] = "CustomTvScraperShow";
+static constexpr char KEY_CUSTOM_TV_SCRAPER_EPISODE[] = "CustomTvScraperEpisode";
+static constexpr char KEY_DEBUG_MODE_ACTIVATED[] = "DebugModeActivated";
+static constexpr char KEY_DONATED[] = "Donated";
+
+static constexpr char KEY_CSV_EXPORT_SEPARATOR[] = "CsvExport/Separator";
+static constexpr char KEY_CSV_EXPORT_REPLACEMENT[] = "CsvExport/Replacement";
+static constexpr char KEY_CSV_EXPORT_TYPES[] = "CsvExport/Types";
+static constexpr char KEY_CSV_EXPORT_MOVIE_FIELDS[] = "CsvExport/MovieFields";
+static constexpr char KEY_CSV_EXPORT_TV_SHOW_FIELDS[] = "CsvExport/TvShowFields";
+static constexpr char KEY_CSV_EXPORT_TV_EPISODE_FIELDS[] = "CsvExport/TvEpisodeFields";
+static constexpr char KEY_CSV_EXPORT_CONCERT_FIELDS[] = "CsvExport/ConcertFields";
+static constexpr char KEY_CSV_EXPORT_MUSIC_ARTIST_FIELDS[] = "CsvExport/MusicArtistFields";
+static constexpr char KEY_CSV_EXPORT_MUSIC_ALBUM_FIELDS[] = "CsvExport/MusicAlbumFields";
+
+static constexpr char KEY_DOWNLOAD_ACTOR_IMAGES[] = "DownloadActorImages";
+static constexpr char KEY_DOWNLOADS_DELETE_ARCHIVES[] = "Downloads/DeleteArchives";
+static constexpr char KEY_DOWNLOADS_IMPORT_DIALOG_POSITION[] = "Downloads/ImportDialogPosition";
+static constexpr char KEY_DOWNLOADS_IMPORT_DIALOG_SIZE[] = "Downloads/ImportDialogSize";
+static constexpr char KEY_DOWNLOADS_KEEP_SOURCE[] = "Downloads/KeepSource";
+static constexpr char KEY_DOWNLOADS_MAKE_MKV_DIALOG_POSITION[] = "Downloads/MakeMkvDialogPosition";
+static constexpr char KEY_DOWNLOADS_MAKE_MKV_DIALOG_SIZE[] = "Downloads/MakeMkvDialogSize";
+static constexpr char KEY_EXCLUDE_WORDS[] = "excludeWords";
+static constexpr char KEY_IGNORE_ARTICLES_WHEN_SORTING[] = "IgnoreArticlesWhenSorting";
+static constexpr char KEY_IS_MAIN_WINDOW_MAXIMIZED[] = "MainWindowMaximized";
+static constexpr char KEY_LAST_IMAGE_PATH[] = "LastImagePath";
+static constexpr char KEY_MAIN_SPLITTER_STATE[] = "MainSplitterState";
+static constexpr char KEY_MAIN_WINDOW_POSITION[] = "MainWindowPosition";
+static constexpr char KEY_MAIN_WINDOW_SIZE[] = "MainWindowSize";
+static constexpr char KEY_MEDIA_STATUS_COLUMN[] = "MediaStatusColumn";
+static constexpr char KEY_MOVIE_DUPLICATES_SPLITTER_STATE[] = "MovieDuplicatesSplitterState";
+static constexpr char KEY_MOVIE_IGNORE_DUPLICATE_ORIGINAL_TITLE[] = "Movies/IgnoreDuplicateOriginalTitle";
+static constexpr char KEY_MOVIE_SET_ARTWORK_DIRECTORY[] = "MovieSetArtwork/Directory";
+static constexpr char KEY_MOVIE_SET_ARTWORK_STORING_TYPE[] = "MovieSetArtwork/StoringType";
+static constexpr char KEY_MOVIES_MULTI_SCRAPE_ONLY_WITH_ID[] = "Movies/MultiScrapeOnlyWithId";
+static constexpr char KEY_MOVIES_MULTI_SCRAPE_SAVE_EACH[] = "Movies/MultiScrapeSaveEach";
+static constexpr char KEY_MUSIC_ARTISTS_EXTRA_FANARTS[] = "Music/Artists/ExtraFanarts";
+static constexpr char KEY_SCRAPER_CURRENT_MOVIE_SCRAPER[] = "Scraper/CurrentMovieScraper";
+static constexpr char KEY_SCRAPER_CURRENT_TV_SHOW_SCRAPER[] = "Scraper/CurrentTvShowScraper";
+static constexpr char KEY_SCRAPER_CURRENT_CONCERT_SCRAPER[] = "Scraper/CurrentConcertScraper";
+static constexpr char KEY_SCRAPER_TV_SHOW_DETAILS[] = "Scrapers/TvShows/%1";
+static constexpr char KEY_SCRAPER_TV_EPISODE_DETAILS[] = "Scrapers/Episodes/%1";
+static constexpr char KEY_SCRAPER_CONCERT_DETAILS[] = "Scrapers/Concerts/%1";
+static constexpr char KEY_SCRAPERS_SHOW_ADULT[] = "Scrapers/ShowAdult";
+static constexpr char KEY_SETTINGS_WINDOW_POSITION[] = "SettingsWindowPosition";
+static constexpr char KEY_SETTINGS_WINDOW_SIZE[] = "SettingsWindowSize";
+static constexpr char KEY_STARTUP_SECTION[] = "StartupSection";
+static constexpr char KEY_TV_SHOW_UPDATE_OPTION[] = "TvShowUpdateOption";
+static constexpr char KEY_TV_SHOWS_SEASON_ORDER[] = "TvShows/SeasonOrder";
+static constexpr char KEY_TV_SHOWS_SHOW_MISSING_EPISODES[] = "TvShows/ShowMissingEpisodesHint";
+static constexpr char KEY_USE_PLOT_FOR_OUTLINE[] = "Movies/UsePlotForOutline";
+static constexpr char KEY_USE_YOUTUBE_PLUGIN_URL[] = "UseYoutubePluginURLs";
+static constexpr char KEY_WARNINGS_DO_NOT_SHOW_DELETE_IMAGE_CONFIRM[] = "Warnings/DontShowDeleteImageConfirm";
+
+
 Settings::Settings(QObject* parent) : QObject(parent)
 {
     auto advancedSettingsPair = AdvancedSettingsXmlReader::loadFromDefaultPath();
-    m_advancedSettings = advancedSettingsPair.first;
+    m_advancedSettings = std::move(advancedSettingsPair.first);
 
     qDebug() << m_advancedSettings;
 
@@ -92,11 +152,12 @@ QSettings* Settings::settings()
 
 ScraperSettings* Settings::scraperSettings(const QString& id)
 {
-    if (m_scraperSettings.find(id) == m_scraperSettings.cend()) {
-        qCritical() << "[ScraperSettings] Missing settings entry in settings map!";
+    std::string idStd = id.toStdString();
+    if (m_scraperSettings.find(idStd) == m_scraperSettings.cend()) {
+        qCritical() << "[TvScraperSettingsWidget] Missing settings entry in settings map!";
         return nullptr;
     }
-    return m_scraperSettings[id].get();
+    return m_scraperSettings[idStd].get();
 }
 
 /**
@@ -105,87 +166,104 @@ ScraperSettings* Settings::scraperSettings(const QString& id)
 void Settings::loadSettings()
 {
     // Globals
-    m_mainWindowSize = settings()->value("MainWindowSize").toSize();
-    m_settingsWindowSize = settings()->value("SettingsWindowSize").toSize();
-    m_mainWindowMaximized = settings()->value("MainWindowMaximized").toBool();
-    m_mainSplitterState = settings()->value("MainSplitterState").toByteArray();
-    m_movieDuplicatesSplitterState = settings()->value("MovieDuplicatesSplitterState").toByteArray();
-    m_debugModeActivated = settings()->value("DebugModeActivated", false).toBool();
-    m_debugLogPath = settings()->value("DebugLogPath").toString();
-    m_autoLoadStreamDetails = settings()->value("AutoLoadStreamDetails", true).toBool();
-    m_usePlotForOutline = settings()->value("Movies/UsePlotForOutline", true).toBool();
-    m_ignoreDuplicateOriginalTitle = settings()->value("Movies/IgnoreDuplicateOriginalTitle", true).toBool();
-    m_downloadActorImages = settings()->value("DownloadActorImages", true).toBool();
-    m_ignoreArticlesWhenSorting = settings()->value("IgnoreArticlesWhenSorting", false).toBool();
-    m_checkForUpdates = settings()->value("CheckForUpdates", true).toBool();
-    m_showAdultScrapers = settings()->value("Scrapers/ShowAdult", false).toBool();
-    m_startupSection = settings()->value("StartupSection", "movies").toString();
-    m_donated = settings()->value("Donated", false).toBool();
-    m_lastImagePath = settings()->value("LastImagePath", QDir::homePath()).toString();
+    m_mainWindowSize = settings()->value(KEY_MAIN_WINDOW_SIZE).toSize();
+    m_settingsWindowSize = settings()->value(KEY_SETTINGS_WINDOW_SIZE).toSize();
+    m_mainWindowMaximized = settings()->value(KEY_IS_MAIN_WINDOW_MAXIMIZED).toBool();
+    m_mainSplitterState = settings()->value(KEY_MAIN_SPLITTER_STATE).toByteArray();
+    m_movieDuplicatesSplitterState = settings()->value(KEY_MOVIE_DUPLICATES_SPLITTER_STATE).toByteArray();
+    m_debugModeActivated = settings()->value(KEY_DEBUG_MODE_ACTIVATED, false).toBool();
+    m_autoLoadStreamDetails = settings()->value(KEY_AUTO_LOAD_STREAM_DETAILS, true).toBool();
+    m_usePlotForOutline = settings()->value(KEY_USE_PLOT_FOR_OUTLINE, true).toBool();
+    m_ignoreDuplicateOriginalTitle = settings()->value(KEY_MOVIE_IGNORE_DUPLICATE_ORIGINAL_TITLE, true).toBool();
+    m_downloadActorImages = settings()->value(KEY_DOWNLOAD_ACTOR_IMAGES, true).toBool();
+    m_ignoreArticlesWhenSorting = settings()->value(KEY_IGNORE_ARTICLES_WHEN_SORTING, false).toBool();
+    m_checkForUpdates = settings()->value(KEY_CHECK_FOR_UPDATES, true).toBool();
+    m_showAdultScrapers = settings()->value(KEY_SCRAPERS_SHOW_ADULT, false).toBool();
+    m_startupSection = settings()->value(KEY_STARTUP_SECTION, "movies").toString();
+    m_donated = settings()->value(KEY_DONATED, false).toBool();
+    m_lastImagePath = settings()->value(KEY_LAST_IMAGE_PATH, QDir::homePath()).toString();
 
     // Window positions
-    m_mainWindowPosition = fixWindowPosition(settings()->value("MainWindowPosition").toPoint());
-    m_settingsWindowPosition = fixWindowPosition(settings()->value("SettingsWindowPosition").toPoint());
-    m_importDialogPosition = fixWindowPosition(settings()->value("Downloads/ImportDialogPosition").toPoint());
-    m_makeMkvDialogPosition = fixWindowPosition(settings()->value("Downloads/MakeMkvDialogPosition").toPoint());
+    m_mainWindowPosition = fixWindowPosition(settings()->value(KEY_MAIN_WINDOW_POSITION).toPoint());
+    m_settingsWindowPosition = fixWindowPosition(settings()->value(KEY_SETTINGS_WINDOW_POSITION).toPoint());
+    m_importDialogPosition = fixWindowPosition(settings()->value(KEY_DOWNLOADS_IMPORT_DIALOG_POSITION).toPoint());
+    m_makeMkvDialogPosition = fixWindowPosition(settings()->value(KEY_DOWNLOADS_MAKE_MKV_DIALOG_POSITION).toPoint());
 
     // Tv Shows
-    m_seasonOrder = SeasonOrder(settings()->value("TvShows/SeasonOrder", 1).toInt());
+    m_seasonOrder = SeasonOrder(settings()->value(KEY_TV_SHOWS_SEASON_ORDER, 1).toInt());
 
     // Warnings
-    m_dontShowDeleteImageConfirm = settings()->value("Warnings/DontShowDeleteImageConfirm", false).toBool();
+    m_dontShowDeleteImageConfirm = settings()->value(KEY_WARNINGS_DO_NOT_SHOW_DELETE_IMAGE_CONFIRM, false).toBool();
 
     m_directorySettings.loadSettings();
     m_kodiSettings.loadSettings();
     m_importSettings.loadSettings();
     m_networkSettings.loadSettings();
 
-    m_excludeWords = settings()->value("excludeWords").toString();
+    m_excludeWords =
+        settings()->value(KEY_EXCLUDE_WORDS).toString().remove(" ").split(",", ElchSplitBehavior::SkipEmptyParts);
+
     if (m_excludeWords.isEmpty()) {
-        m_excludeWords = "ac3,dts,custom,dc,divx,divx5,dsr,dsrip,dutch,dvd,dvdrip,dvdscr,dvdscreener,screener,dvdivx,"
-                         "cam,fragment,fs,hdtv,hdrip,hdtvrip,internal,limited,"
-                         "multisubs,ntsc,ogg,ogm,pal,pdtv,proper,repack,rerip,retail,r3,r5,bd5,se,svcd,swedish,german,"
-                         "read.nfo,nfofix,unrated,ws,telesync,ts,telecine,tc,"
-                         "brrip,bdrip,480p,480i,576p,576i,720p,720i,1080p,1080i,hrhd,hrhdtv,hddvd,bluray,x264,h264,"
-                         "xvid,xvidvd,xxx,www,mkv";
+        m_excludeWords = QStringLiteral(
+            "ac3,dts,custom,dc,divx,divx5,dsr,dsrip,dutch,dvd,dvdrip,dvdscr,dvdscreener,screener,dvdivx,"
+            "cam,fragment,fs,hdtv,hdrip,hdtvrip,internal,limited,"
+            "multisubs,ntsc,ogg,ogm,pal,pdtv,proper,repack,rerip,retail,r3,r5,bd5,se,svcd,swedish,german,"
+            "nfofix,unrated,ws,telesync,ts,telecine,tc,"
+            "brrip,bdrip,480p,480i,576p,576i,720p,720i,1080p,1080i,hrhd,hrhdtv,hddvd,bluray,x264,h264,"
+            "xvid,xvidvd,xxx,www,mkv")
+                             .split(",", ElchSplitBehavior::SkipEmptyParts);
     }
 
     const auto loadSettings = [&](auto scrapers) {
         for (auto* scraper : scrapers) {
             if (scraper->hasSettings()) {
-                QString id = scraper->identifier();
+                std::string id = scraper->identifier().toStdString();
                 // may replace existing settings
-                m_scraperSettings[id] = std::make_unique<ScraperSettingsQt>(id, *m_settings);
+                m_scraperSettings[id] = std::make_unique<ScraperSettingsQt>(scraper->identifier(), *m_settings);
                 scraper->loadSettings(*m_scraperSettings[id]);
             }
         }
     };
-    loadSettings(Manager::instance()->scrapers().movieScrapers());
-    loadSettings(Manager::instance()->scrapers().concertScrapers());
     loadSettings(Manager::instance()->scrapers().musicScrapers());
-    loadSettings(Manager::instance()->imageProviders());
+
+    // new version
+    const auto loadSettings2 = [&](auto scrapers) {
+        for (auto* scraper : scrapers) {
+            if (scraper->hasSettings()) {
+                std::string id = scraper->meta().identifier.toStdString();
+                // may replace existing settings
+                m_scraperSettings[id] = std::make_unique<ScraperSettingsQt>(scraper->meta().identifier, *m_settings);
+                scraper->loadSettings(*m_scraperSettings[id]);
+            }
+        }
+    };
+    loadSettings2(Manager::instance()->scrapers().movieScrapers());
+    loadSettings2(Manager::instance()->scrapers().concertScrapers());
+    loadSettings2(Manager::instance()->imageProviders());
 
     // TV scraper settings
     for (auto* scraper : Manager::instance()->scrapers().tvScrapers()) {
-        const auto& id = scraper->identifier();
-        m_scraperSettings[id] = std::make_unique<ScraperSettingsQt>(id, *m_settings);
-        scraper->loadSettings(*m_scraperSettings[id]);
+        const QString id = scraper->meta().identifier;
+        m_scraperSettings[id.toStdString()] = std::make_unique<ScraperSettingsQt>(id, *m_settings);
+        // Not loaded on initial start up but per request.
     }
 
-    m_currentMovieScraper = settings()->value("Scraper/CurrentMovieScraper", 0).toInt();
+    m_currentMovieScraper = settings()->value(KEY_SCRAPER_CURRENT_MOVIE_SCRAPER, 0).toInt();
+    m_currentTvShowScraper = settings()->value(KEY_SCRAPER_CURRENT_TV_SHOW_SCRAPER, 0).toString();
+    m_currentConcertScraper = settings()->value(KEY_SCRAPER_CURRENT_CONCERT_SCRAPER, 0).toString();
 
     // Media Centers
-    m_youtubePluginUrls = settings()->value("UseYoutubePluginURLs", false).toBool();
+    m_youtubePluginUrls = settings()->value(KEY_USE_YOUTUBE_PLUGIN_URL, false).toBool();
 
     // Data Files
     QVector<DataFile> dataFiles;
-    int dataFileSize = settings()->beginReadArray("AllDataFiles");
+    int dataFileSize = settings()->beginReadArray(KEY_ALL_DATA_FILES);
     for (int i = 0; i < dataFileSize; ++i) {
         settings()->setArrayIndex(i);
         DataFileType type = DataFileType(settings()->value("type").toInt());
         QString fileName = settings()->value("fileName").toString();
         if (fileName.isEmpty()) {
-            for (const DataFile& initialDataFile : m_initialDataFilesFrodo) {
+            for (const DataFile& initialDataFile : asConst(m_initialDataFilesFrodo)) {
                 if (initialDataFile.type() == type) {
                     fileName = initialDataFile.fileName();
                     break;
@@ -198,7 +276,7 @@ void Settings::loadSettings()
     }
     settings()->endArray();
 
-    for (const DataFile& initialDataFile : m_initialDataFilesFrodo) {
+    for (const DataFile& initialDataFile : asConst(m_initialDataFilesFrodo)) {
         bool found = false;
         for (const DataFile& df : dataFiles) {
             if (df.type() == initialDataFile.type()) {
@@ -218,17 +296,17 @@ void Settings::loadSettings()
     }
 
     // Movie set artwork
-    m_movieSetArtworkType = MovieSetArtworkType(settings()->value("MovieSetArtwork/StoringType", 0).toInt());
-    m_movieSetArtworkDirectory = settings()->value("MovieSetArtwork/Directory").toString();
+    m_movieSetArtworkType = MovieSetArtworkType(settings()->value(KEY_MOVIE_SET_ARTWORK_STORING_TYPE, 0).toInt());
+    m_movieSetArtworkDirectory = settings()->value(KEY_MOVIE_SET_ARTWORK_DIRECTORY).toString();
 
     // Media Status Columns
     m_mediaStatusColumns.clear();
-    for (const QVariant& column : settings()->value("MediaStatusColumn").toList()) {
+    for (const QVariant& column : settings()->value(KEY_MEDIA_STATUS_COLUMN).toList()) {
         m_mediaStatusColumns.append(static_cast<MediaStatusColumn>(column.toInt()));
     }
 
     m_customMovieScraper.clear();
-    int customMovieScraperSize = settings()->beginReadArray("CustomMovieScraper");
+    int customMovieScraperSize = settings()->beginReadArray(KEY_CUSTOM_MOVIE_SCRAPER);
     for (int i = 0; i < customMovieScraperSize; ++i) {
         settings()->setArrayIndex(i);
         m_customMovieScraper.insert(
@@ -236,84 +314,137 @@ void Settings::loadSettings()
     }
     settings()->endArray();
 
-    m_customTvScraper.clear();
-    const int customTvScraperShowSize = settings()->beginReadArray("CustomTvScraperShow");
+    // ------------------------------------------------------------------------
+
+    m_customTvScraperShow.clear();
+    const int customTvScraperShowSize = settings()->beginReadArray(KEY_CUSTOM_TV_SCRAPER_SHOW);
     for (int i = 0; i < customTvScraperShowSize; ++i) {
         settings()->setArrayIndex(i);
-        m_customTvScraper.insert(
+        m_customTvScraperShow.insert(
             ShowScraperInfo(settings()->value("Info").toInt()), settings()->value("Scraper").toString());
+    }
+    // Ensure that all details are set. Default is TheTvDb because it supports most.
+    for (const ShowScraperInfo info : mediaelch::allShowScraperInfos()) {
+        if (!m_customTvScraperShow.contains(info)) {
+            m_customTvScraperShow.insert(info, mediaelch::scraper::TheTvDb::ID);
+        }
     }
     settings()->endArray();
 
+    m_customTvScraperEpisode.clear();
+    const int customTvScraperEpisodeSize = settings()->beginReadArray(KEY_CUSTOM_TV_SCRAPER_EPISODE);
+    for (int i = 0; i < customTvScraperEpisodeSize; ++i) {
+        settings()->setArrayIndex(i);
+        m_customTvScraperEpisode.insert(
+            EpisodeScraperInfo(settings()->value("Info").toInt()), settings()->value("Scraper").toString());
+    }
+    // Ensure that all details are set. Default is TheTvDb because it supports most.
+    const auto allEpisodeInfos = mediaelch::allEpisodeScraperInfos();
+    for (const EpisodeScraperInfo info : allEpisodeInfos) {
+        if (!m_customTvScraperEpisode.contains(info)) {
+            m_customTvScraperEpisode.insert(info, mediaelch::scraper::TheTvDb::ID);
+        }
+    }
+    settings()->endArray();
+
+    // ------------------------------------------------------------------------
+
+    m_csvExportSeparator = settings()->value(KEY_CSV_EXPORT_SEPARATOR).toString();
+    m_csvExportReplacement = settings()->value(KEY_CSV_EXPORT_REPLACEMENT).toString();
+    m_csvExportTypes = settings()->value(KEY_CSV_EXPORT_TYPES).toString().split(",", ElchSplitBehavior::SkipEmptyParts);
+    m_csvExportMovieFields =
+        settings()->value(KEY_CSV_EXPORT_MOVIE_FIELDS).toString().split(",", ElchSplitBehavior::SkipEmptyParts);
+    m_csvExportTvShowFields =
+        settings()->value(KEY_CSV_EXPORT_TV_SHOW_FIELDS).toString().split(",", ElchSplitBehavior::SkipEmptyParts);
+    m_csvExportTvEpisodeFields =
+        settings()->value(KEY_CSV_EXPORT_TV_EPISODE_FIELDS).toString().split(",", ElchSplitBehavior::SkipEmptyParts);
+    m_csvExportConcertFields =
+        settings()->value(KEY_CSV_EXPORT_CONCERT_FIELDS).toString().split(",", ElchSplitBehavior::SkipEmptyParts);
+    m_csvExportMusicArtistFields =
+        settings()->value(KEY_CSV_EXPORT_MUSIC_ARTIST_FIELDS).toString().split(",", ElchSplitBehavior::SkipEmptyParts);
+    m_csvExportMusicAlbumFields =
+        settings()->value(KEY_CSV_EXPORT_MUSIC_ALBUM_FIELDS).toString().split(",", ElchSplitBehavior::SkipEmptyParts);
+
     // Downloads
-    m_deleteArchives = settings()->value("Downloads/DeleteArchives", false).toBool();
-    m_importDialogSize = settings()->value("Downloads/ImportDialogSize").toSize();
-    m_makeMkvDialogSize = settings()->value("Downloads/MakeMkvDialogSize").toSize();
-    m_keepDownloadSource = settings()->value("Downloads/KeepSource", true).toBool();
+    m_deleteArchives = settings()->value(KEY_DOWNLOADS_DELETE_ARCHIVES, false).toBool();
+    m_importDialogSize = settings()->value(KEY_DOWNLOADS_IMPORT_DIALOG_SIZE).toSize();
+    m_makeMkvDialogSize = settings()->value(KEY_DOWNLOADS_MAKE_MKV_DIALOG_SIZE).toSize();
+    m_keepDownloadSource = settings()->value(KEY_DOWNLOADS_KEEP_SOURCE, true).toBool();
 
     // Movies
-    m_multiScrapeOnlyWithId = settings()->value("Movies/MultiScrapeOnlyWithId", false).toBool();
-    m_multiScrapeSaveEach = settings()->value("Movies/MultiScrapeSaveEach", false).toBool();
+    m_multiScrapeOnlyWithId = settings()->value(KEY_MOVIES_MULTI_SCRAPE_ONLY_WITH_ID, false).toBool();
+    m_multiScrapeSaveEach = settings()->value(KEY_MOVIES_MULTI_SCRAPE_SAVE_EACH, false).toBool();
 
-    m_showMissingEpisodesHint = settings()->value("TvShows/ShowMissingEpisodesHint", true).toBool();
+    m_showMissingEpisodesHint = settings()->value(KEY_TV_SHOWS_SHOW_MISSING_EPISODES, true).toBool();
 
-    m_extraFanartsMusicArtists = settings()->value("Music/Artists/ExtraFanarts", 0).toInt();
+    m_extraFanartsMusicArtists = settings()->value(KEY_MUSIC_ARTISTS_EXTRA_FANARTS, 0).toInt();
 }
 
 void Settings::saveSettings()
 {
-    settings()->setValue("DebugModeActivated", m_debugModeActivated);
-    settings()->setValue("DebugLogPath", m_debugLogPath.toString());
-    settings()->setValue("AutoLoadStreamDetails", m_autoLoadStreamDetails);
+    settings()->setValue(KEY_DEBUG_MODE_ACTIVATED, m_debugModeActivated);
+    settings()->setValue(KEY_AUTO_LOAD_STREAM_DETAILS, m_autoLoadStreamDetails);
 
-    settings()->setValue("UseYoutubePluginURLs", m_youtubePluginUrls);
-    settings()->setValue("Movies/UsePlotForOutline", m_usePlotForOutline);
-    settings()->setValue("Movies/IgnoreDuplicateOriginalTitle", m_ignoreDuplicateOriginalTitle);
-    settings()->setValue("DownloadActorImages", m_downloadActorImages);
-    settings()->setValue("IgnoreArticlesWhenSorting", m_ignoreArticlesWhenSorting);
-    settings()->setValue("CheckForUpdates", m_checkForUpdates);
-    settings()->setValue("Scrapers/ShowAdult", m_showAdultScrapers);
-    settings()->setValue("StartupSection", m_startupSection);
-    settings()->setValue("Donated", m_donated);
-    settings()->setValue("LastImagePath", m_lastImagePath.toString());
+    settings()->setValue(KEY_USE_YOUTUBE_PLUGIN_URL, m_youtubePluginUrls);
+    settings()->setValue(KEY_USE_PLOT_FOR_OUTLINE, m_usePlotForOutline);
+    settings()->setValue(KEY_MOVIE_IGNORE_DUPLICATE_ORIGINAL_TITLE, m_ignoreDuplicateOriginalTitle);
+    settings()->setValue(KEY_DOWNLOAD_ACTOR_IMAGES, m_downloadActorImages);
+    settings()->setValue(KEY_IGNORE_ARTICLES_WHEN_SORTING, m_ignoreArticlesWhenSorting);
+    settings()->setValue(KEY_CHECK_FOR_UPDATES, m_checkForUpdates);
+    settings()->setValue(KEY_SCRAPERS_SHOW_ADULT, m_showAdultScrapers);
+    settings()->setValue(KEY_STARTUP_SECTION, m_startupSection);
+    settings()->setValue(KEY_DONATED, m_donated);
+    settings()->setValue(KEY_LAST_IMAGE_PATH, m_lastImagePath.toString());
 
 
     // Tv Shows
-    settings()->setValue("TvShows/SeasonOrder", static_cast<int>(m_seasonOrder));
+    settings()->setValue(KEY_TV_SHOWS_SEASON_ORDER, static_cast<int>(m_seasonOrder));
 
     // Warnings
-    settings()->setValue("Warnings/DontShowDeleteImageConfirm", m_dontShowDeleteImageConfirm);
+    settings()->setValue(KEY_WARNINGS_DO_NOT_SHOW_DELETE_IMAGE_CONFIRM, m_dontShowDeleteImageConfirm);
 
     m_directorySettings.saveSettings();
     m_kodiSettings.saveSettings();
     m_importSettings.saveSettings();
     m_networkSettings.saveSettings();
 
-    settings()->setValue("excludeWords", m_excludeWords);
+    settings()->setValue(KEY_EXCLUDE_WORDS, m_excludeWords.join(","));
 
     const auto saveSettings = [&](auto scrapers) {
         for (auto* scraper : scrapers) {
             if (scraper->hasSettings()) {
-                QString id = scraper->identifier();
+                std::string id = scraper->identifier().toStdString();
                 scraper->saveSettings(*m_scraperSettings[id]);
                 m_scraperSettings[id]->save();
             }
         }
     };
-    saveSettings(Manager::instance()->scrapers().movieScrapers());
-    saveSettings(Manager::instance()->scrapers().concertScrapers());
     saveSettings(Manager::instance()->scrapers().musicScrapers());
-    saveSettings(Manager::instance()->imageProviders());
+
+    const auto saveSettings2 = [&](auto scrapers) {
+        for (auto* scraper : scrapers) {
+            if (scraper->hasSettings()) {
+                std::string id = scraper->meta().identifier.toStdString();
+                scraper->saveSettings(*m_scraperSettings[id]);
+                m_scraperSettings[id]->save();
+            }
+        }
+    };
+    saveSettings2(Manager::instance()->scrapers().movieScrapers());
+    saveSettings2(Manager::instance()->scrapers().concertScrapers());
+    saveSettings2(Manager::instance()->imageProviders());
 
     // TV scraper settings
     for (auto* scraper : Manager::instance()->scrapers().tvScrapers()) {
         // Settings may have been changed somewhere else.
-        m_scraperSettings[scraper->identifier()]->save();
+        m_scraperSettings[scraper->meta().identifier.toStdString()]->save();
     }
 
-    settings()->setValue("Scraper/CurrentMovieScraper", m_currentMovieScraper);
+    settings()->setValue(KEY_SCRAPER_CURRENT_MOVIE_SCRAPER, m_currentMovieScraper);
+    settings()->setValue(KEY_SCRAPER_CURRENT_TV_SHOW_SCRAPER, m_currentTvShowScraper);
+    settings()->setValue(KEY_SCRAPER_CURRENT_CONCERT_SCRAPER, m_currentConcertScraper);
 
-    settings()->beginWriteArray("AllDataFiles");
+    settings()->beginWriteArray(KEY_ALL_DATA_FILES);
     for (int i = 0, n = m_dataFiles.count(); i < n; ++i) {
         settings()->setArrayIndex(i);
         settings()->setValue("type", static_cast<int>(m_dataFiles.at(i).type()));
@@ -322,17 +453,17 @@ void Settings::saveSettings()
     }
     settings()->endArray();
 
-    settings()->setValue("MovieSetArtwork/StoringType", static_cast<int>(m_movieSetArtworkType));
-    settings()->setValue("MovieSetArtwork/Directory", m_movieSetArtworkDirectory.toString());
+    settings()->setValue(KEY_MOVIE_SET_ARTWORK_STORING_TYPE, static_cast<int>(m_movieSetArtworkType));
+    settings()->setValue(KEY_MOVIE_SET_ARTWORK_DIRECTORY, m_movieSetArtworkDirectory.toString());
 
     QList<QVariant> columns;
     for (const MediaStatusColumn& column : m_mediaStatusColumns) {
         columns.append(static_cast<int>(column));
     }
-    settings()->setValue("MediaStatusColumn", columns);
+    settings()->setValue(KEY_MEDIA_STATUS_COLUMN, columns);
 
     int i = 0;
-    settings()->beginWriteArray("CustomMovieScraper");
+    settings()->beginWriteArray(KEY_CUSTOM_MOVIE_SCRAPER);
     QMapIterator<MovieScraperInfo, QString> it(m_customMovieScraper);
     while (it.hasNext()) {
         it.next();
@@ -342,26 +473,40 @@ void Settings::saveSettings()
     }
     settings()->endArray();
 
-    i = 0;
-    settings()->beginWriteArray("CustomTvScraper");
-    QMapIterator<ShowScraperInfo, QString> itTv(m_customTvScraper);
-    while (itTv.hasNext()) {
-        itTv.next();
-        settings()->setArrayIndex(i++);
-        settings()->setValue("Info", static_cast<int>(itTv.key()));
-        settings()->setValue("Scraper", itTv.value());
+    {
+        i = 0;
+        settings()->beginWriteArray(KEY_CUSTOM_TV_SCRAPER_SHOW);
+        QMapIterator<ShowScraperInfo, QString> itTvShow(m_customTvScraperShow);
+        while (itTvShow.hasNext()) {
+            itTvShow.next();
+            settings()->setArrayIndex(i++);
+            settings()->setValue("Info", static_cast<int>(itTvShow.key()));
+            settings()->setValue("Scraper", itTvShow.value());
+        }
+        settings()->endArray();
     }
-    settings()->endArray();
+    {
+        i = 0;
+        settings()->beginWriteArray(KEY_CUSTOM_TV_SCRAPER_EPISODE);
+        QMapIterator<EpisodeScraperInfo, QString> itTvEpisode(m_customTvScraperEpisode);
+        while (itTvEpisode.hasNext()) {
+            itTvEpisode.next();
+            settings()->setArrayIndex(i++);
+            settings()->setValue("Info", static_cast<int>(itTvEpisode.key()));
+            settings()->setValue("Scraper", itTvEpisode.value());
+        }
+        settings()->endArray();
+    }
 
-    settings()->setValue("Downloads/DeleteArchives", m_deleteArchives);
-    settings()->setValue("Downloads/KeepSource", m_keepDownloadSource);
+    settings()->setValue(KEY_DOWNLOADS_DELETE_ARCHIVES, m_deleteArchives);
+    settings()->setValue(KEY_DOWNLOADS_KEEP_SOURCE, m_keepDownloadSource);
 
-    settings()->setValue("TvShows/ShowMissingEpisodesHint", m_showMissingEpisodesHint);
+    settings()->setValue(KEY_TV_SHOWS_SHOW_MISSING_EPISODES, m_showMissingEpisodesHint);
 
-    settings()->setValue("Movies/MultiScrapeOnlyWithId", m_multiScrapeOnlyWithId);
-    settings()->setValue("Movies/MultiScrapeSaveEach", m_multiScrapeSaveEach);
+    settings()->setValue(KEY_MOVIES_MULTI_SCRAPE_ONLY_WITH_ID, m_multiScrapeOnlyWithId);
+    settings()->setValue(KEY_MOVIES_MULTI_SCRAPE_SAVE_EACH, m_multiScrapeSaveEach);
 
-    settings()->setValue("Music/Artists/ExtraFanarts", m_extraFanartsMusicArtists);
+    settings()->setValue(KEY_MUSIC_ARTISTS_EXTRA_FANARTS, m_extraFanartsMusicArtists);
 
     settings()->sync();
 
@@ -418,7 +563,7 @@ QPoint Settings::makeMkvDialogPosition()
     return m_makeMkvDialogPosition;
 }
 
-bool Settings::mainWindowMaximized()
+bool Settings::mainWindowMaximized() const
 {
     return m_mainWindowMaximized;
 }
@@ -457,12 +602,57 @@ NetworkSettings& Settings::networkSettings()
     return m_networkSettings;
 }
 
+QString Settings::csvExportSeparator()
+{
+    return m_csvExportSeparator;
+}
+
+QString Settings::csvExportReplacement()
+{
+    return m_csvExportReplacement;
+}
+
+QStringList Settings::csvExportTypes()
+{
+    return m_csvExportTypes;
+}
+
+QStringList Settings::csvExportMovieFields()
+{
+    return m_csvExportMovieFields;
+}
+
+QStringList Settings::csvExportTvShowFields()
+{
+    return m_csvExportTvShowFields;
+}
+
+QStringList Settings::csvExportTvEpisodeFields()
+{
+    return m_csvExportTvEpisodeFields;
+}
+
+QStringList Settings::csvExportConcertFields()
+{
+    return m_csvExportConcertFields;
+}
+
+QStringList Settings::csvExportMusicArtistFields()
+{
+    return m_csvExportMusicArtistFields;
+}
+
+QStringList Settings::csvExportMusicAlbumFields()
+{
+    return m_csvExportMusicAlbumFields;
+}
+
 /**
  * \brief Returns the words to exclude from media names,
  * seperated by commas
  * \return exclude words
  */
-QString Settings::excludeWords()
+QStringList Settings::excludeWords()
 {
     return m_excludeWords;
 }
@@ -471,30 +661,21 @@ QString Settings::excludeWords()
  * \brief Returns the state of the debug mode
  * \return Debug mode active or not
  */
-bool Settings::debugModeActivated()
+bool Settings::debugModeActivated() const
 {
     return m_debugModeActivated;
-}
-
-/**
- * \brief Returns the path to the logfile
- * \return Path to logfile
- */
-mediaelch::FilePath Settings::debugLogPath()
-{
-    return m_debugLogPath;
 }
 
 /**
  * \brief Returns true if urls youtube trailers should be converted
  * \return Change format of URLs to youtube
  */
-bool Settings::useYoutubePluginUrls()
+bool Settings::useYoutubePluginUrls() const
 {
     return m_youtubePluginUrls;
 }
 
-bool Settings::autoLoadStreamDetails()
+bool Settings::autoLoadStreamDetails() const
 {
     return m_autoLoadStreamDetails;
 }
@@ -551,7 +732,7 @@ bool Settings::ignoreDuplicateOriginalTitle() const
 void Settings::setMainWindowSize(QSize mainWindowSize)
 {
     m_mainWindowSize = mainWindowSize;
-    settings()->setValue("MainWindowSize", mainWindowSize);
+    settings()->setValue(KEY_MAIN_WINDOW_SIZE, mainWindowSize);
 }
 
 /**
@@ -561,49 +742,49 @@ void Settings::setMainWindowSize(QSize mainWindowSize)
 void Settings::setMainWindowPosition(QPoint mainWindowPosition)
 {
     m_mainWindowPosition = mainWindowPosition;
-    settings()->setValue("MainWindowPosition", mainWindowPosition);
+    settings()->setValue(KEY_MAIN_WINDOW_POSITION, mainWindowPosition);
 }
 
 void Settings::setSettingsWindowSize(QSize settingsWindowSize)
 {
     m_settingsWindowSize = settingsWindowSize;
-    settings()->setValue("SettingsWindowSize", settingsWindowSize);
+    settings()->setValue(KEY_SETTINGS_WINDOW_SIZE, settingsWindowSize);
 }
 
 void Settings::setSettingsWindowPosition(QPoint settingsWindowPosition)
 {
     m_settingsWindowPosition = settingsWindowPosition;
-    settings()->setValue("SettingsWindowPosition", settingsWindowPosition);
+    settings()->setValue(KEY_SETTINGS_WINDOW_POSITION, settingsWindowPosition);
 }
 
 void Settings::setImportDialogSize(QSize size)
 {
     m_importDialogSize = size;
-    settings()->setValue("Downloads/ImportDialogSize", size);
+    settings()->setValue(KEY_DOWNLOADS_IMPORT_DIALOG_SIZE, size);
 }
 
 void Settings::setImportDialogPosition(QPoint position)
 {
     m_importDialogPosition = position;
-    settings()->setValue("Downloads/ImportDialogPosition", position);
+    settings()->setValue(KEY_DOWNLOADS_IMPORT_DIALOG_POSITION, position);
 }
 
 void Settings::setMakeMkvDialogSize(QSize size)
 {
     m_makeMkvDialogSize = size;
-    settings()->setValue("Downloads/MakeMkvDialogSize", size);
+    settings()->setValue(KEY_DOWNLOADS_MAKE_MKV_DIALOG_SIZE, size);
 }
 
 void Settings::setMakeMkvDialogPosition(QPoint position)
 {
     m_makeMkvDialogPosition = position;
-    settings()->setValue("Downloads/MakeMkvDialogPosition", position);
+    settings()->setValue(KEY_DOWNLOADS_MAKE_MKV_DIALOG_POSITION, position);
 }
 
 void Settings::setMainWindowMaximized(bool max)
 {
     m_mainWindowMaximized = max;
-    settings()->setValue("MainWindowMaximized", max);
+    settings()->setValue(KEY_IS_MAIN_WINDOW_MAXIMIZED, max);
 }
 
 /**
@@ -613,13 +794,67 @@ void Settings::setMainWindowMaximized(bool max)
 void Settings::setMainSplitterState(QByteArray state)
 {
     m_mainSplitterState = state;
-    settings()->setValue("MainSplitterState", state);
+    settings()->setValue(KEY_MAIN_SPLITTER_STATE, state);
 }
 
 void Settings::setMovieDuplicatesSplitterState(QByteArray state)
 {
     m_movieDuplicatesSplitterState = state;
-    settings()->setValue("MovieDuplicatesSplitterState", state);
+    settings()->setValue(KEY_MOVIE_DUPLICATES_SPLITTER_STATE, state);
+}
+
+void Settings::setCsvExportSeparator(QString separator)
+{
+    m_csvExportSeparator = separator;
+    settings()->setValue(KEY_CSV_EXPORT_SEPARATOR, separator);
+}
+
+void Settings::setCsvExportReplacement(QString replacement)
+{
+    m_csvExportReplacement = replacement;
+    settings()->setValue(KEY_CSV_EXPORT_REPLACEMENT, replacement);
+}
+
+void Settings::setCsvExportTypes(QStringList exportTypes)
+{
+    m_csvExportTypes = exportTypes;
+    settings()->setValue(KEY_CSV_EXPORT_TYPES, exportTypes.join(","));
+}
+
+void Settings::setCsvExportMovieFields(QStringList fields)
+{
+    m_csvExportMovieFields = fields;
+    settings()->setValue(KEY_CSV_EXPORT_MOVIE_FIELDS, fields.join(","));
+}
+
+void Settings::setCsvExportTvShowFields(QStringList fields)
+{
+    m_csvExportTvShowFields = fields;
+    settings()->setValue(KEY_CSV_EXPORT_TV_SHOW_FIELDS, fields.join(","));
+}
+
+void Settings::setCsvExportTvEpisodeFields(QStringList fields)
+{
+    m_csvExportTvEpisodeFields = fields;
+    settings()->setValue(KEY_CSV_EXPORT_TV_EPISODE_FIELDS, fields.join(","));
+}
+
+void Settings::setCsvExportConcertFields(QStringList fields)
+{
+    m_csvExportConcertFields = fields;
+    settings()->setValue(KEY_CSV_EXPORT_CONCERT_FIELDS, fields.join(","));
+}
+
+void Settings::setCsvExportMusicArtistFields(QStringList fields)
+{
+    m_csvExportMusicArtistFields = fields;
+    settings()->setValue(KEY_CSV_EXPORT_MUSIC_ARTIST_FIELDS, fields.join(","));
+}
+
+void Settings::setCsvExportMusicAlbumFields(QStringList fields)
+{
+    m_csvExportMusicAlbumFields = fields;
+    settings()->setValue(KEY_CSV_EXPORT_MUSIC_ALBUM_FIELDS, fields.join(","));
 }
 
 /**
@@ -629,21 +864,12 @@ void Settings::setMovieDuplicatesSplitterState(QByteArray state)
  */
 void Settings::setExcludeWords(QString words)
 {
-    m_excludeWords = words;
+    m_excludeWords = words.remove(" ").split(",", ElchSplitBehavior::SkipEmptyParts);
 }
 
 void Settings::setDebugModeActivated(bool enabled)
 {
     m_debugModeActivated = enabled;
-}
-
-/**
- * \brief Sets the path to the logfile
- * \param path Path to log file
- */
-void Settings::setDebugLogPath(mediaelch::FilePath path)
-{
-    m_debugLogPath = path;
 }
 
 /**
@@ -677,11 +903,11 @@ void Settings::setIgnoreDuplicateOriginalTitle(bool ignoreDuplicateOriginalTitle
     m_ignoreDuplicateOriginalTitle = ignoreDuplicateOriginalTitle;
 }
 
-template<>
-QSet<ConcertScraperInfo> Settings::scraperInfos(QString scraperId)
+QSet<ConcertScraperInfo> Settings::scraperInfosConcert(const QString& scraperId)
 {
     QSet<ConcertScraperInfo> infos;
-    for (const auto& info : settings()->value(QString("Scrapers/Concerts/%1").arg(scraperId)).toString().split(",")) {
+    for (const auto& info :
+        settings()->value(QString(KEY_SCRAPER_CONCERT_DETAILS).arg(scraperId)).toString().split(",")) {
         infos << ConcertScraperInfo(info.toInt());
     }
     if (!infos.isEmpty() && infos.contains(ConcertScraperInfo::Invalid)) {
@@ -703,17 +929,43 @@ QSet<MovieScraperInfo> Settings::scraperInfos(QString scraperId)
     return infos;
 }
 
-template<>
-QSet<ShowScraperInfo> Settings::scraperInfos(QString scraperId)
+QSet<ShowScraperInfo> Settings::scraperInfosShow(const QString& scraperId)
 {
     QSet<ShowScraperInfo> infos;
-    for (const auto& info : settings()->value(QString("Scrapers/TvShows/%1").arg(scraperId)).toString().split(",")) {
-        infos.insert(ShowScraperInfo(info.toInt()));
+    for (const auto& info :
+        settings()->value(QString(KEY_SCRAPER_TV_SHOW_DETAILS).arg(scraperId)).toString().split(",")) {
+        bool ok = false;
+        const int val = info.toInt(&ok);
+        if (ok) {
+            infos << ShowScraperInfo(val);
+        }
     }
-    if (infos.contains(ShowScraperInfo::Invalid)) {
-        // TODO: Error handling?
-        // Something went wrong?
-        infos.clear();
+    // Return ALL available details if non were found.
+    // Reason: Users very likely DID NOT un-select all details and then scrape a show.
+    // Also if there aren't any details stored yet, the user has to select all details.
+    if (infos.isEmpty() || infos.contains(ShowScraperInfo::Invalid)) {
+        return mediaelch::allShowScraperInfos();
+    }
+    return infos;
+}
+
+QSet<EpisodeScraperInfo> Settings::scraperInfosEpisode(const QString& scraperId)
+{
+    QSet<EpisodeScraperInfo> infos;
+    for (const auto& info :
+        settings()->value(QString(KEY_SCRAPER_TV_EPISODE_DETAILS).arg(scraperId)).toString().split(",")) {
+        bool ok = false;
+        const int val = info.toInt(&ok);
+        if (ok) {
+            infos << EpisodeScraperInfo(val);
+        }
+    }
+    // Return ALL available details if non were found.
+    // Reason: Users very likely DID NOT un-select all details and then scrape an episode.
+    // Also if there aren't any details stored yet, the user has to select all details.
+    // And the episode-tab may be "hidden" (the user has to select it).
+    if (infos.isEmpty() || infos.contains(EpisodeScraperInfo::Invalid)) {
+        return mediaelch::allEpisodeScraperInfos();
     }
     return infos;
 }
@@ -733,6 +985,8 @@ QSet<MusicScraperInfo> Settings::scraperInfos(QString scraperId)
 
 void Settings::setScraperInfos(const QString& scraperNo, const QSet<MovieScraperInfo>& items)
 {
+    // TODO: Currently based on the Index of the UpdateType combobox.
+    //       Better: Pass UpdateType + ScraperID
     QStringList infos;
     infos.reserve(items.size());
     for (const auto info : items) {
@@ -741,24 +995,34 @@ void Settings::setScraperInfos(const QString& scraperNo, const QSet<MovieScraper
     settings()->setValue(QString("Scrapers/Movies/%1").arg(scraperNo), infos.join(","));
 }
 
-void Settings::setScraperInfos(const QString& scraperNo, const QSet<ShowScraperInfo>& items)
+void Settings::setScraperInfosShow(const QString& scraperId, const QSet<ShowScraperInfo>& items)
 {
     QStringList infos;
     infos.reserve(items.size());
     for (const auto info : items) {
         infos << QString::number(static_cast<int>(info));
     }
-    settings()->setValue(QStringLiteral("Scrapers/Episodes/%1").arg(scraperNo), infos.join(","));
+    settings()->setValue(QString(KEY_SCRAPER_TV_SHOW_DETAILS).arg(scraperId), infos.join(","));
 }
 
-void Settings::setScraperInfos(const QString& scraperNo, const QSet<ConcertScraperInfo>& items)
+void Settings::setScraperInfosEpisode(const QString& scraperId, const QSet<EpisodeScraperInfo>& items)
 {
     QStringList infos;
     infos.reserve(items.size());
     for (const auto info : items) {
         infos << QString::number(static_cast<int>(info));
     }
-    settings()->setValue(QString("Scrapers/Concerts/%1").arg(scraperNo), infos.join(","));
+    settings()->setValue(QString(KEY_SCRAPER_TV_EPISODE_DETAILS).arg(scraperId), infos.join(","));
+}
+
+void Settings::setScraperInfosConcert(const QString& scraperId, const QSet<ConcertScraperInfo>& items)
+{
+    QStringList infos;
+    infos.reserve(items.size());
+    for (const auto info : items) {
+        infos << QString::number(static_cast<int>(info));
+    }
+    settings()->setValue(QString(KEY_SCRAPER_CONCERT_DETAILS).arg(scraperId), infos.join(","));
 }
 
 void Settings::setScraperInfos(const QString& scraperNo, const QSet<MusicScraperInfo>& items)
@@ -772,7 +1036,7 @@ void Settings::setScraperInfos(const QString& scraperNo, const QSet<MusicScraper
 }
 
 
-bool Settings::downloadActorImages()
+bool Settings::downloadActorImages() const
 {
     return m_downloadActorImages;
 }
@@ -840,12 +1104,12 @@ void Settings::renamings(Renamer::RenameType renameType, bool& files, bool& fold
 
 int Settings::tvShowUpdateOption()
 {
-    return settings()->value("TvShowUpdateOption", 0).toInt();
+    return settings()->value(KEY_TV_SHOW_UPDATE_OPTION, 0).toInt();
 }
 
 void Settings::setTvShowUpdateOption(int option)
 {
-    settings()->setValue("TvShowUpdateOption", option);
+    settings()->setValue(KEY_TV_SHOW_UPDATE_OPTION, option);
 }
 
 AdvancedSettings* Settings::advanced()
@@ -925,14 +1189,36 @@ void Settings::setCustomMovieScraper(QMap<MovieScraperInfo, QString> customMovie
     m_customMovieScraper = customMovieScraper;
 }
 
-const QMap<ShowScraperInfo, QString>& Settings::customTvScraper() const
+const QMap<ShowScraperInfo, QString>& Settings::customTvScraperShow() const
 {
-    return m_customTvScraper;
+    return m_customTvScraperShow;
 }
 
-void Settings::setCustomTvScraper(QMap<ShowScraperInfo, QString> customTvScraper)
+void Settings::setCustomTvScraperShow(QMap<ShowScraperInfo, QString> customTvScraper)
 {
-    m_customTvScraper = customTvScraper;
+    // Ensure that all details are set. Default is TheTvDb because it supports most.
+    for (const ShowScraperInfo info : mediaelch::allShowScraperInfos()) {
+        if (!customTvScraper.contains(info)) {
+            customTvScraper.insert(info, mediaelch::scraper::TheTvDb::ID);
+        }
+    }
+    m_customTvScraperShow = customTvScraper;
+}
+
+const QMap<EpisodeScraperInfo, QString>& Settings::customTvScraperEpisode() const
+{
+    return m_customTvScraperEpisode;
+}
+
+void Settings::setCustomTvScraperEpisode(QMap<EpisodeScraperInfo, QString> customTvScraper)
+{
+    // Ensure that all details are set. Default is TheTvDb because it supports most.
+    for (const EpisodeScraperInfo info : mediaelch::allEpisodeScraperInfos()) {
+        if (!customTvScraper.contains(info)) {
+            customTvScraper.insert(info, mediaelch::scraper::TheTvDb::ID);
+        }
+    }
+    m_customTvScraperEpisode = customTvScraper;
 }
 
 int Settings::currentMovieScraper() const
@@ -943,7 +1229,31 @@ int Settings::currentMovieScraper() const
 void Settings::setCurrentMovieScraper(int current)
 {
     m_currentMovieScraper = current;
-    settings()->setValue("Scraper/CurrentMovieScraper", current);
+    settings()->setValue(KEY_SCRAPER_CURRENT_MOVIE_SCRAPER, current);
+    settings()->sync();
+}
+
+const QString& Settings::currentTvShowScraper() const
+{
+    return m_currentTvShowScraper;
+}
+
+const QString& Settings::currentConcertScraper() const
+{
+    return m_currentConcertScraper;
+}
+
+void Settings::setCurrentTvShowScraper(const QString& current)
+{
+    m_currentTvShowScraper = current;
+    settings()->setValue(KEY_SCRAPER_CURRENT_TV_SHOW_SCRAPER, current);
+    settings()->sync();
+}
+
+void Settings::setCurrentConcertScraper(const QString& current)
+{
+    m_currentConcertScraper = current;
+    settings()->setValue(KEY_SCRAPER_CURRENT_CONCERT_SCRAPER, current);
     settings()->sync();
 }
 
@@ -952,7 +1262,7 @@ void Settings::setDeleteArchives(bool deleteArchives)
     m_deleteArchives = deleteArchives;
 }
 
-bool Settings::deleteArchives()
+bool Settings::deleteArchives() const
 {
     return m_deleteArchives;
 }
@@ -1059,7 +1369,7 @@ QString Settings::startupSection()
 void Settings::setDonated(bool donated)
 {
     m_donated = donated;
-    settings()->setValue("Donated", m_donated);
+    settings()->setValue(KEY_DONATED, m_donated);
     settings()->sync();
     emit sigDonated(donated);
 }

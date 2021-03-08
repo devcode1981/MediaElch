@@ -1,16 +1,17 @@
 #include "test/test_helpers.h"
 
-#include "scrapers/movie/VideoBuster.h"
+#include "scrapers/movie/videobuster/VideoBuster.h"
 #include "settings/Settings.h"
 
 #include <chrono>
 
 using namespace std::chrono_literals;
+using namespace mediaelch::scraper;
 
 // VideoBuster is a German website so search results and movie
 // details in these tests are German as well.
 
-TEST_CASE("VideoBuster returns valid search results", "[scraper][VideoBuster][search]")
+TEST_CASE("VideoBuster returns valid search results", "[VideoBuster][search]")
 {
     VideoBuster VideoBuster;
 
@@ -23,7 +24,7 @@ TEST_CASE("VideoBuster returns valid search results", "[scraper][VideoBuster][se
 }
 
 
-TEST_CASE("VideoBuster scrapes correct movie details", "[scraper][VideoBuster][load_data]")
+TEST_CASE("VideoBuster scrapes correct movie details", "[VideoBuster][load_data]")
 {
     VideoBuster videoBuster;
     // VideoBuster has no outline

@@ -37,7 +37,7 @@ RenamerDialog::RenamerDialog(QWidget* parent) : QDialog(parent), ui(new Ui::Rena
     ui->helpLabel->setText(tr("Please see %1 for help and examples on how to use the renamer.")
                                .arg("<a "
                                     "href=\"https://mediaelch.github.io/mediaelch-doc/renaming.html\">"
-                                    "RenamingFiles.md</a>"));
+                                    "Renaming Files</a>"));
 }
 
 RenamerDialog::~RenamerDialog()
@@ -231,7 +231,7 @@ void RenamerDialog::renameMovies(QVector<Movie*> movies, const RenamerConfig& co
             continue;
         }
         if (movie->hasChanged()) {
-            ui->results->append(QObject::tr("<b>Movie</b> \"%1\" has been edited but is not saved").arg(movie->name()));
+            ui->results->append(tr("<b>Movie</b> \"%1\" has been edited but is not saved").arg(movie->name()));
             continue;
         }
 
@@ -292,7 +292,7 @@ void RenamerDialog::renameShows(QVector<TvShow*> shows,
         Renamer::replace(newFolderName, "title", show->title());
         Renamer::replace(newFolderName, "showTitle", show->title());
         Renamer::replace(newFolderName, "year", show->firstAired().toString("yyyy"));
-        helper::sanitizeFileName(newFolderName);
+        helper::sanitizeFolderName(newFolderName);
         if (newFolderName != dir.dirName()) {
             const int row = addResultToTable(dir.dirName(), newFolderName, Renamer::RenameOperation::Rename);
             QDir parentDir(dir.path());
@@ -335,7 +335,7 @@ void RenamerDialog::renameConcerts(QVector<Concert*> concerts, const RenamerConf
             continue;
         }
         if (concert->hasChanged()) {
-            ui->results->append(tr("<b>Concert</b> \"%1\" has been edited but is not saved").arg(concert->name()));
+            ui->results->append(tr("<b>Concert</b> \"%1\" has been edited but is not saved").arg(concert->title()));
             continue;
         }
 
@@ -354,9 +354,9 @@ int RenamerDialog::addResultToTable(const QString& oldFileName,
 {
     const QString opString = [operation]() -> QString {
         switch (operation) {
-        case Renamer::RenameOperation::CreateDir: return QObject::tr("Create dir");
-        case Renamer::RenameOperation::Move: return QObject::tr("Move");
-        case Renamer::RenameOperation::Rename: return QObject::tr("Rename");
+        case Renamer::RenameOperation::CreateDir: return tr("Create dir");
+        case Renamer::RenameOperation::Move: return tr("Move");
+        case Renamer::RenameOperation::Rename: return tr("Rename");
         }
         qCritical() << "[RenamerDialog] RenameOperation: Missing case.";
         return QString("");

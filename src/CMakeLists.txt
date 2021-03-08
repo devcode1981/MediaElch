@@ -53,6 +53,21 @@ target_link_libraries(
     mediaelch_network
     mediaelch_renamer
     mediaelch_scrapers
+    mediaelch_scraper_scraper_tmdb
+    mediaelch_scraper_imdb_api
+    mediaelch_scraper_movie_aebn
+    mediaelch_scraper_movie_ade
+    mediaelch_scraper_movie_custom
+    mediaelch_scraper_movie_hotmovies
+    mediaelch_scraper_movie_imdb
+    mediaelch_scraper_movie_ofdb
+    mediaelch_scraper_movie_tmdb
+    mediaelch_scraper_movie_videobuster
+    mediaelch_scraper_tv_custom
+    mediaelch_scraper_tv_thetvdb
+    mediaelch_scraper_tv_imdb
+    mediaelch_scraper_tv_tmdb
+    mediaelch_scraper_tv_tvmaze
     mediaelch_settings
     mediaelch_tvShows
     mediaelch_ui
@@ -89,9 +104,7 @@ endif()
 
 # ------------------------------------------------------------------------------
 # Sources
-target_sources(
-  libmediaelch PUBLIC ../data/MediaElch.qrc ../data/i18n.qrc ../ui.qrc
-)
+target_sources(libmediaelch PUBLIC ../data/MediaElch.qrc ../ui.qrc)
 
 target_sources(libmediaelch PRIVATE qml/AlbumImageProvider.cpp)
 

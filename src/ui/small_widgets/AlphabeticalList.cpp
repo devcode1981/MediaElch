@@ -20,9 +20,12 @@ AlphabeticalList::AlphabeticalList(QWidget* parent, MyTableView* parentTableView
 
 void AlphabeticalList::adjustSize()
 {
-    const int parentHeight = dynamic_cast<QWidget*>(parent())->size().height();
-    move(-width(), m_topSpace);
-    setFixedHeight(parentHeight - m_topSpace - m_bottomSpace);
+    auto* parentWidget = dynamic_cast<QWidget*>(parent());
+    if (parentWidget != nullptr) {
+        const int parentHeight = parentWidget->size().height();
+        move(-width(), m_topSpace);
+        setFixedHeight(parentHeight - m_topSpace - m_bottomSpace);
+    }
 }
 
 void AlphabeticalList::paintEvent(QPaintEvent* /*event*/)
@@ -96,7 +99,7 @@ void AlphabeticalList::setAlphas(QStringList alphas)
     }
 
     for (const QString& alpha : alphas) {
-        auto button = new QToolButton(this);
+        auto* button = new QToolButton(this);
         button->setText(alpha);
         button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
         m_layout->addWidget(button);
@@ -106,7 +109,7 @@ void AlphabeticalList::setAlphas(QStringList alphas)
 
 void AlphabeticalList::onAlphaClicked()
 {
-    auto button = dynamic_cast<QToolButton*>(sender());
+    auto* button = dynamic_cast<QToolButton*>(sender());
     if (button == nullptr) {
         return;
     }

@@ -1,14 +1,17 @@
 #pragma once
 
+#include "data/Locale.h"
 #include "data/Rating.h"
 #include "data/TmdbId.h"
 #include "file/Path.h"
 #include "globals/Actor.h"
 #include "globals/Globals.h"
 #include "globals/Poster.h"
+#include "scrapers/tv_show/ShowIdentifier.h"
 #include "tv_shows/EpisodeNumber.h"
 #include "tv_shows/SeasonNumber.h"
 #include "tv_shows/TvDbId.h"
+#include "tv_shows/TvMazeId.h"
 #include "tv_shows/TvShowEpisode.h"
 
 #include <QMetaType>
@@ -20,7 +23,12 @@
 
 class MediaCenterInterface;
 class TvShowModelItem;
-class TvScraperInterface;
+
+namespace mediaelch {
+namespace scraper {
+class TvScraper;
+}
+} // namespace mediaelch
 
 class TvShow final : public QObject
 {
@@ -30,6 +38,7 @@ public:
     explicit TvShow(mediaelch::DirectoryPath dir = {}, QObject* parent = nullptr);
     void clear();
     void clear(QSet<ShowScraperInfo> infos);
+    void clearEpisodes(QSet<EpisodeScraperInfo> infos, bool onlyNew);
     void addEpisode(TvShowEpisode* episode);
     int episodeCount() const;
 
@@ -39,6 +48,8 @@ public:
     /// \details Some Kodi skins may display this title instead of title().
     ///          Unused by MediaElch except for reading/writing the XML tag.
     QString showTitle() const;
+    /// \brief Original title of the show, i.e. in it's native language.
+    QString originalTitle() const;
     /// \brief Title used to sort TV shows. Useful when using special characters, etc.
     QString sortTitle() const;
 
@@ -57,6 +68,7 @@ public:
     TmdbId tmdbId() const;
     TvDbId tvdbId() const;
     ImdbId imdbId() const;
+    TvMazeId tvmazeId() const;
     QString episodeGuideUrl() const;
     QVector<Certification> certifications() const;
     QVector<const Actor*> actors() const;
@@ -90,6 +102,7 @@ public:
     int databaseId() const;
     bool syncNeeded() const;
     QSet<ShowScraperInfo> infosToLoad() const;
+    QSet<EpisodeScraperInfo> episodeInfosToLoad() const;
     bool hasTune() const;
     std::chrono::minutes runtime() const;
 
@@ -99,8 +112,10 @@ public:
     bool showMissingEpisodes() const;
     bool hideSpecialsInMissingEpisodes() const;
 
-    void setTitle(QString title);
-    void setShowTitle(QString title);
+    void setTitle(const QString& title);
+    void setOriginalTitle(const QString& title);
+    void setShowTitle(const QString& title);
+    void setSortTitle(const QString& sortTitle);
     void setUserRating(double rating);
     void setTop250(int top250);
     void setFirstAired(QDate aired);
@@ -113,6 +128,7 @@ public:
     void setTmdbId(TmdbId id);
     void setTvdbId(TvDbId id);
     void setImdbId(ImdbId id);
+    void setTvMazeId(TvMazeId id);
     void setEpisodeGuideUrl(QString url);
     void addActor(Actor actor);
     void setPosters(QVector<Poster> posters);
@@ -137,7 +153,6 @@ public:
     void setSyncNeeded(bool syncNeeded);
     void setHasTune(bool hasTune);
     void setRuntime(std::chrono::minutes runtime);
-    void setSortTitle(QString sortTitle);
     void setShowMissingEpisodes(bool showMissing, bool updateDatabase = true);
     void setHideSpecialsInMissingEpisodes(bool hideSpecials, bool updateDatabase = true);
 
@@ -146,11 +161,14 @@ public:
     void removeTag(QString tag);
 
     bool loadData(MediaCenterInterface* mediaCenterInterface, bool reloadFromNfo = true);
-    void loadData(TvDbId id,
-        TvScraperInterface* tvScraperInterface,
-        TvShowUpdateType type,
-        QSet<ShowScraperInfo> infosToLoad);
     bool saveData(MediaCenterInterface* mediaCenterInterface);
+    void scrapeData(mediaelch::scraper::TvScraper* scraper,
+        const mediaelch::scraper::ShowIdentifier& id,
+        const mediaelch::Locale& locale,
+        SeasonOrder order,
+        TvShowUpdateType updateType,
+        const QSet<ShowScraperInfo>& showDetails,
+        const QSet<EpisodeScraperInfo>& episodedetails);
     void clearImages();
     void fillMissingEpisodes();
     void clearMissingEpisodes();
@@ -175,8 +193,6 @@ public:
     void removeExtraFanart(QString file);
     void clearExtraFanartData();
 
-    void scraperLoadDone();
-
     static bool lessThan(TvShow* a, TvShow* b);
     static QVector<ImageType> imageTypes();
     static QVector<ImageType> seasonImageTypes();
@@ -194,7 +210,7 @@ public:
 
 signals:
     /// \todo Remove in future versions. TV show should not know about its scrapers.
-    void sigLoaded(TvShow* show, QSet<ShowScraperInfo> details);
+    void sigLoaded(TvShow* show, QSet<ShowScraperInfo> details, mediaelch::Locale locale);
     void sigChanged(TvShow*);
 
 private:
@@ -202,6 +218,7 @@ private:
     mediaelch::DirectoryPath m_dir;
     QString m_title;
     QString m_showTitle;
+    QString m_originalTitle;
     QString m_sortTitle;
     QVector<Rating> m_ratings;
     double m_userRating = 0.0;
@@ -216,6 +233,7 @@ private:
     TmdbId m_tmdbId;
     TvDbId m_tvdbId;
     ImdbId m_imdbId;
+    TvMazeId m_tvmazeId;
     QString m_episodeGuideUrl;
     std::vector<std::unique_ptr<Actor>> m_actors;
     QVector<Poster> m_posters;
@@ -238,6 +256,7 @@ private:
     bool m_syncNeeded = false;
     /// \todo Remove in future versions.
     QSet<ShowScraperInfo> m_infosToLoad;
+    QSet<EpisodeScraperInfo> m_episodeInfosToLoad;
     QVector<QByteArray> m_extraFanartImagesToAdd;
     QStringList m_extraFanartsToRemove;
     QStringList m_extraFanarts;

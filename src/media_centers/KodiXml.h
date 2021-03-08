@@ -26,7 +26,6 @@ public:
     ~KodiXml() override;
 
     void setVersion(mediaelch::KodiVersion version);
-    bool hasFeature(MediaCenterFeature feature) override;
 
     // movies
     bool saveMovie(Movie* movie) override;
@@ -98,15 +97,12 @@ public:
     QString nfoFilePath(Artist* artist) override;
     QString nfoFilePath(Album* album) override;
 
-    static void writeStreamDetails(QXmlStreamWriter& xml, StreamDetails* streamDetails);
-    static void writeStreamDetails(QDomDocument& doc,
-        const StreamDetails* streamDetails,
-        QVector<Subtitle*> subtitles = QVector<Subtitle*>());
-    static void setListValue(QDomDocument& doc, const QString& name, const QStringList& values);
-    static QDomElement addTextValue(QDomDocument& doc, const QString& name, const QString& value);
-    static void appendXmlNode(QDomDocument& doc, QDomNode& node);
-    static void removeChildNodes(QDomDocument& doc, const QString& name);
-    static QDomElement setTextValue(QDomDocument& doc, const QString& name, const QString& value);
+    static void writeStreamDetails(QXmlStreamWriter& xml,
+        StreamDetails* streamDetails,
+        const QVector<Subtitle*>& subtitles,
+        bool hasStreamDetails);
+
+    static void writeStringsAsOneTagEach(QXmlStreamWriter& xml, const QString& name, const QStringList& list);
 
     void loadBooklets(Album* album) override;
 

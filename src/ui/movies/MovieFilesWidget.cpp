@@ -8,6 +8,7 @@
 #include "movies/Movie.h"
 #include "movies/MovieModel.h"
 #include "movies/MovieProxyModel.h"
+#include "movies/file_searcher/MovieFileSearcher.h"
 #include "ui/movies/MovieMultiScrapeDialog.h"
 #include "ui/small_widgets/AlphabeticalList.h"
 #include "ui/small_widgets/LoadingStreamDetails.h"
@@ -70,7 +71,7 @@ MovieFilesWidget::MovieFilesWidget(QWidget* parent) : QWidget(parent), ui(new Ui
     QMapIterator<ColorLabel, QString> it(helper::labels());
     while (it.hasNext()) {
         it.next();
-        auto action = new QAction(it.value(), this);
+        auto* action = new QAction(it.value(), this);
         action->setIcon(helper::iconForLabel(it.key()));
         action->setProperty("color", static_cast<int>(it.key()));
         connect(action, &QAction::triggered, this, &MovieFilesWidget::onLabel);
@@ -127,14 +128,12 @@ MovieFilesWidget::MovieFilesWidget(QWidget* parent) : QWidget(parent), ui(new Ui
     connect(ui->sortBySeen,      &MyLabel::clicked, this, &MovieFilesWidget::onSortBySeen);
     connect(ui->sortByYear,      &MyLabel::clicked, this, &MovieFilesWidget::onSortByYear);
 
-    connect(m_movieProxyModel, &QAbstractItemModel::rowsInserted, this, &MovieFilesWidget::onViewUpdated);
-    connect(m_movieProxyModel, &QAbstractItemModel::rowsRemoved,  this, &MovieFilesWidget::onViewUpdated);
+    // For some reason, the proxy model emits "rowsRemoved" before "endRemoveRows()" is called in the source model.
+    connect(Manager::instance()->movieModel(), &QAbstractItemModel::rowsInserted, this, &MovieFilesWidget::updateStatusLabel);
+    connect(Manager::instance()->movieModel(), &QAbstractItemModel::rowsRemoved,  this, &MovieFilesWidget::updateStatusLabel);
     // clang-format on
 }
 
-/**
- * \brief MovieFilesWidget::~MovieFilesWidget
- */
 MovieFilesWidget::~MovieFilesWidget()
 {
     delete ui;
@@ -179,7 +178,7 @@ void MovieFilesWidget::multiScrape()
         return;
     }
 
-    auto searchWidget = new MovieMultiScrapeDialog(this);
+    auto* searchWidget = new MovieMultiScrapeDialog(this);
     searchWidget->setMovies(movies);
     const int result = searchWidget->exec();
     searchWidget->deleteLater();
@@ -235,7 +234,7 @@ void MovieFilesWidget::loadStreamDetails()
         movies.at(0)->controller()->loadStreamDetailsFromFile();
         movies.at(0)->setChanged(true);
     } else {
-        auto loader = new LoadingStreamDetails(this);
+        auto* loader = new LoadingStreamDetails(this);
         loader->loadMovies(movies);
         delete loader;
     }
@@ -341,7 +340,7 @@ void MovieFilesWidget::setFilter(QVector<Filter*> filters, QString text)
     m_movieProxyModel->setFilter(filters, text);
     m_movieProxyModel->setFilterWildcard("*" + text + "*");
     setAlphaListData();
-    onViewUpdated();
+    updateStatusLabel();
 }
 
 /**
@@ -498,13 +497,18 @@ void MovieFilesWidget::selectMovie(Movie* movie)
 {
     int row = Manager::instance()->movieModel()->movies().indexOf(movie);
     QModelIndex index = Manager::instance()->movieModel()->index(row, 0, QModelIndex());
+    selectIndex(index);
+}
+
+void MovieFilesWidget::selectIndex(const QModelIndex& index)
+{
     ui->files->selectRow(m_movieProxyModel->mapFromSource(index).row());
 }
 
 void MovieFilesWidget::onActionMediaStatusColumn()
 {
     m_contextMenu->close();
-    auto action = dynamic_cast<QAction*>(QObject::sender());
+    auto* action = dynamic_cast<QAction*>(QObject::sender());
     if (action == nullptr) {
         return;
     }
@@ -525,7 +529,7 @@ void MovieFilesWidget::onActionMediaStatusColumn()
 void MovieFilesWidget::onLabel()
 {
     m_contextMenu->close();
-    auto action = dynamic_cast<QAction*>(QObject::sender());
+    auto* action = dynamic_cast<QAction*>(QObject::sender());
     if (action == nullptr) {
         return;
     }
@@ -537,7 +541,7 @@ void MovieFilesWidget::onLabel()
     }
 }
 
-void MovieFilesWidget::onViewUpdated()
+void MovieFilesWidget::updateStatusLabel()
 {
     int movieCount = Manager::instance()->movieModel()->rowCount();
     int visibleCount = m_movieProxyModel->rowCount();

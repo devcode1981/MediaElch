@@ -8,6 +8,7 @@
 #include "globals/ImageDialog.h"
 #include "globals/ImagePreviewDialog.h"
 #include "globals/Manager.h"
+#include "globals/MessageIds.h"
 #include "image/ImageCapture.h"
 #include "ui/notifications/NotificationBox.h"
 #include "ui/tv_show/TvShowSearch.h"
@@ -67,7 +68,8 @@ TvShowWidgetEpisode::TvShowWidgetEpisode(QWidget* parent) :
     connect(m_posterDownloadManager,
         &DownloadManager::sigDownloadFinished,
         this,
-        &TvShowWidgetEpisode::onPosterDownloadFinished);
+        &TvShowWidgetEpisode::onPosterDownloadFinished,
+        static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
     connect(ui->buttonRevert, &QAbstractButton::clicked, this, &TvShowWidgetEpisode::onRevertChanges);
     connect(
         ui->buttonReloadStreamDetails, &QAbstractButton::clicked, this, &TvShowWidgetEpisode::onReloadStreamDetails);
@@ -80,12 +82,18 @@ TvShowWidgetEpisode::TvShowWidgetEpisode(QWidget* parent) :
     connect(ui->thumbnail, &ClosableImage::sigImageDropped, this, &TvShowWidgetEpisode::onImageDropped);
     connect(ui->thumbnail, &ClosableImage::sigCapture, this, &TvShowWidgetEpisode::onCaptureImage);
 
+    // TODO: TagCloud: Remove label per default
+    ui->tagCloud->hideLabel();
+    ui->tagCloud->setPlaceholder(tr("Add Tag"));
+    connect(ui->tagCloud, &TagCloud::activated, this, &TvShowWidgetEpisode::onAddTag);
+    connect(ui->tagCloud, &TagCloud::deactivated, this, &TvShowWidgetEpisode::onRemoveTag);
+
     onClear();
 
-
-    // Connect GUI change events to movie object
+    // Connect GUI change events to TV show object
     connect(ui->imdbId, &QLineEdit::textEdited, this, &TvShowWidgetEpisode::onImdbIdChanged);
     connect(ui->tvdbId, &QLineEdit::textEdited, this, &TvShowWidgetEpisode::onTvdbIdChanged);
+    connect(ui->tvmazeId, &QLineEdit::textEdited, this, &TvShowWidgetEpisode::onTvmazeIdChanged);
     connect(ui->name, &QLineEdit::textEdited, this, &TvShowWidgetEpisode::onNameChange);
     connect(ui->showTitle, &QLineEdit::textEdited, this, &TvShowWidgetEpisode::onShowTitleChange);
     connect(ui->season, elchOverload<int>(&QSpinBox::valueChanged), this, &TvShowWidgetEpisode::onSeasonChange);
@@ -197,6 +205,10 @@ void TvShowWidgetEpisode::onClear()
     ui->tvdbId->clear();
     ui->tvdbId->blockSignals(blocked);
 
+    blocked = ui->tvmazeId->blockSignals(true);
+    ui->tvmazeId->clear();
+    ui->tvmazeId->blockSignals(blocked);
+
     blocked = ui->name->blockSignals(true);
     ui->name->clear();
     ui->name->blockSignals(blocked);
@@ -289,6 +301,10 @@ void TvShowWidgetEpisode::onClear()
     ui->epBookmark->setTime(QTime(0, 0, 0));
     ui->epBookmark->blockSignals(blocked);
 
+    blocked = ui->tagCloud->blockSignals(true);
+    ui->tagCloud->clear();
+    ui->tagCloud->blockSignals(blocked);
+
     ui->actors->setRowCount(0);
 
     ui->buttonRevert->setVisible(false);
@@ -317,7 +333,11 @@ void TvShowWidgetEpisode::setEpisode(TvShowEpisode* episode)
     qDebug() << "Entered, episode=" << episode->title();
     m_episode = episode;
     if (!episode->streamDetailsLoaded() && Settings::instance()->autoLoadStreamDetails() && !episode->isDummy()) {
+        // Loading stream details als marks the episode as changed...
+        // TODO: Refactor the "hasChanged" stuff...
+        const bool prevState = episode->hasChanged();
         episode->loadStreamDetailsFromFile();
+        episode->setChanged(prevState);
     }
     ui->missingLabel->setVisible(episode->isDummy());
     updateEpisodeInfo();
@@ -349,6 +369,7 @@ void TvShowWidgetEpisode::updateEpisodeInfo()
     ui->lastPlayed->blockSignals(true);
     ui->overview->blockSignals(true);
     ui->epBookmark->blockSignals(true);
+    ui->tagCloud->blockSignals(true);
 
     onClear();
 
@@ -358,6 +379,7 @@ void TvShowWidgetEpisode::updateEpisodeInfo()
 
     ui->imdbId->setText(m_episode->imdbId().toString());
     ui->tvdbId->setText(m_episode->tvdbId().toString());
+    ui->tvmazeId->setText(m_episode->tvmazeId().toString());
     ui->name->setText(m_episode->title());
     ui->showTitle->setText(m_episode->showTitle());
     ui->season->setValue(m_episode->seasonNumber().toInt());
@@ -421,6 +443,9 @@ void TvShowWidgetEpisode::updateEpisodeInfo()
         ui->certification->addItem(m_episode->certification().toString());
     }
 
+    // TODO: List of all available tags as first argument
+    ui->tagCloud->setTags(m_episode->tags(), m_episode->tags());
+
     // Streamdetails
     updateStreamDetails();
     ui->videoAspectRatio->setEnabled(m_episode->streamDetailsLoaded());
@@ -454,13 +479,8 @@ void TvShowWidgetEpisode::updateEpisodeInfo()
     ui->lastPlayed->blockSignals(false);
     ui->overview->blockSignals(false);
     ui->epBookmark->blockSignals(false);
+    ui->tagCloud->blockSignals(false);
 
-    ui->certification->setEnabled(Manager::instance()->mediaCenterInterfaceTvShow()->hasFeature(
-        MediaCenterFeature::EditTvShowEpisodeCertification));
-    ui->showTitle->setEnabled(
-        Manager::instance()->mediaCenterInterfaceTvShow()->hasFeature(MediaCenterFeature::EditTvShowEpisodeShowTitle));
-    ui->studio->setEnabled(
-        Manager::instance()->mediaCenterInterfaceTvShow()->hasFeature(MediaCenterFeature::EditTvShowEpisodeNetwork));
     ui->buttonRevert->setVisible(m_episode->hasChanged());
 }
 
@@ -524,7 +544,7 @@ void TvShowWidgetEpisode::updateStreamDetails(bool reloadFromFile)
         edit1->setPlaceholderText(tr("Language"));
         edit2->setPlaceholderText(tr("Codec"));
         edit3->setPlaceholderText(tr("Channels"));
-        auto layout = new QHBoxLayout();
+        auto* layout = new QHBoxLayout();
         layout->addWidget(edit1);
         layout->addWidget(edit2);
         layout->addWidget(edit3);
@@ -552,7 +572,7 @@ void TvShowWidgetEpisode::updateStreamDetails(bool reloadFromFile)
                 new QLineEdit(streamDetails->subtitleDetails().at(i).value(StreamDetails::SubtitleDetails::Language));
             edit1->setToolTip(tr("Language"));
             edit1->setPlaceholderText(tr("Language"));
-            auto layout = new QHBoxLayout();
+            auto* layout = new QHBoxLayout();
             layout->addWidget(edit1);
             layout->addStretch(10);
             ui->streamDetails->addLayout(layout, 9 + audioTracks + i, 1);
@@ -633,19 +653,30 @@ void TvShowWidgetEpisode::onStartScraperSearch()
 
     emit sigSetActionSearchEnabled(false, MainWidgets::TvShows);
     emit sigSetActionSaveEnabled(false, MainWidgets::TvShows);
-    TvShowSearch::instance()->setSearchType(TvShowType::Episode);
-    TvShowSearch::instance()->exec(m_episode->showTitle(), m_episode->tvShow()->tvdbId());
-    if (TvShowSearch::instance()->result() == QDialog::Accepted) {
+
+    auto* searchWidget = new TvShowSearch(this);
+    searchWidget->setSearchType(TvShowType::Episode);
+    searchWidget->execWithSearch(m_episode->showTitle());
+
+    if (searchWidget->result() == QDialog::Accepted) {
         onSetEnabled(false);
         connect(
             m_episode.data(), &TvShowEpisode::sigLoaded, this, &TvShowWidgetEpisode::onLoadDone, Qt::UniqueConnection);
-        m_episode->loadData(TvShowSearch::instance()->scraperId(),
-            Manager::instance()->scrapers().tvScrapers().at(0),
-            TvShowSearch::instance()->infosToLoad());
+
+        NotificationBox::instance()->showProgressBar(
+            tr("Scraping episode..."), Constants::TvShowScrapeProgressMessageId);
+
+        m_episode->scrapeData(searchWidget->scraper(),
+            searchWidget->locale(),
+            mediaelch::scraper::ShowIdentifier(searchWidget->showIdentifier()),
+            searchWidget->seasonOrder(),
+            searchWidget->episodeDetailsToLoad());
     } else {
         emit sigSetActionSearchEnabled(true, MainWidgets::TvShows);
         emit sigSetActionSaveEnabled(true, MainWidgets::TvShows);
     }
+
+    searchWidget->deleteLater();
 }
 
 /**
@@ -654,6 +685,8 @@ void TvShowWidgetEpisode::onStartScraperSearch()
  */
 void TvShowWidgetEpisode::onLoadDone()
 {
+    NotificationBox::instance()->hideProgressBar(Constants::TvShowScrapeProgressMessageId);
+
     if (m_episode == nullptr) {
         qWarning() << "My episode is invalid";
         return;
@@ -662,7 +695,7 @@ void TvShowWidgetEpisode::onLoadDone()
     updateEpisodeInfo();
     onSetEnabled(true);
 
-    if (!m_episode->thumbnail().isEmpty()) {
+    if (!m_episode->thumbnail().isEmpty() && m_episode->wantThumbnailDownload()) {
         DownloadManagerElement d;
         d.imageType = ImageType::TvShowEpisodeThumb;
         d.url = m_episode->thumbnail();
@@ -689,7 +722,6 @@ void TvShowWidgetEpisode::onChooseThumbnail()
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(ImageType::TvShowEpisodeThumb);
-    imageDialog->clear();
     imageDialog->setTvShowEpisode(m_episode);
     QVector<Poster> posters;
     if (!m_episode->thumbnail().isEmpty()) {
@@ -698,9 +730,9 @@ void TvShowWidgetEpisode::onChooseThumbnail()
         p.thumbUrl = m_episode->thumbnail();
         posters << p;
     }
-    imageDialog->setDownloads(posters);
+    imageDialog->setDefaultDownloads(posters);
 
-    imageDialog->exec(ImageType::TvShowEpisodeThumb);
+    imageDialog->execWithType(ImageType::TvShowEpisodeThumb);
     const int exitCode = imageDialog->result();
     const QUrl imageUrl = imageDialog->imageUrl();
     imageDialog->deleteLater();
@@ -873,6 +905,12 @@ void TvShowWidgetEpisode::onTvdbIdChanged(QString tvdbid)
     ui->buttonRevert->setVisible(true);
 }
 
+void TvShowWidgetEpisode::onTvmazeIdChanged(QString tvmazeId)
+{
+    m_episode->setTvMazeId(TvMazeId(tvmazeId));
+    ui->buttonRevert->setVisible(true);
+}
+
 /**
  * \brief Marks the episode as changed when the name has changed
  */
@@ -1041,6 +1079,24 @@ void TvShowWidgetEpisode::onStreamDetailsEdited()
     }
 
     m_episode->setChanged(true);
+    ui->buttonRevert->setVisible(true);
+}
+
+void TvShowWidgetEpisode::onAddTag(QString tag)
+{
+    if (m_episode == nullptr) {
+        return;
+    }
+    m_episode->addTag(tag);
+    ui->buttonRevert->setVisible(true);
+}
+
+void TvShowWidgetEpisode::onRemoveTag(QString tag)
+{
+    if (m_episode == nullptr) {
+        return;
+    }
+    m_episode->removeTag(tag);
     ui->buttonRevert->setVisible(true);
 }
 

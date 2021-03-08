@@ -1,20 +1,21 @@
 #include "test/test_helpers.h"
 
-#include "scrapers/movie/AdultDvdEmpire.h"
+#include "scrapers/movie/adultdvdempire/AdultDvdEmpire.h"
 
 #include <chrono>
 
 using namespace std::chrono_literals;
+using namespace mediaelch::scraper;
 
 /// @brief Loads movie data synchronously
-void loadAdultDvdEmpireSync(AdultDvdEmpire& scraper, QHash<MovieScraperInterface*, QString> ids, Movie& movie)
+void loadAdultDvdEmpireSync(AdultDvdEmpire& scraper, QHash<MovieScraper*, QString> ids, Movie& movie)
 {
-    const auto infos = scraper.scraperSupports();
+    const auto infos = scraper.meta().supportedDetails;
     loadDataSync(scraper, ids, movie, infos);
 }
 
 
-TEST_CASE("AdultDvdEmpire scrapes correct movie details", "[scraper][AdultDvdEmpire][load_data]")
+TEST_CASE("AdultDvdEmpire scrapes correct movie details", "[AdultDvdEmpire][load_data]")
 {
     AdultDvdEmpire hm;
 
@@ -47,15 +48,15 @@ TEST_CASE("AdultDvdEmpire scrapes correct movie details", "[scraper][AdultDvdEmp
         const auto actors = m.actors();
         REQUIRE(actors.size() > 15);
         bool foundActor = false;
-        QString actorImage;
+        QString actorThumb;
         for (const auto* actor : actors) {
             if (actor->name == "Adriana Chechik") {
                 foundActor = true;
-                actorImage = actor->thumb;
+                actorThumb = actor->thumb;
                 break;
             }
         }
         CHECK(foundActor);
-        CHECK(actorImage == "https://imgs1cdn.adultempire.com/actors/652646h.jpg");
+        CHECK(actorThumb == "https://imgs1cdn.adultempire.com/actors/652646h.jpg");
     }
 }

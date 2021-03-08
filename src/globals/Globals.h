@@ -12,6 +12,13 @@
 #include <QUrl>
 #include <QVariant>
 
+// Required for smoother upgrade to Qt 6 while still working with Qt 5
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
+using ElchSplitBehavior = QString::SplitBehavior;
+#else
+using ElchSplitBehavior = Qt::SplitBehaviorFlags;
+#endif
+
 // clang-format off
 
 namespace TvShowRoles {
@@ -66,7 +73,8 @@ enum class MainWidgets
     Music,
     Genres,
     Certifications,
-    Downloads
+    Downloads,
+    Duplicates
 };
 
 struct DiscographyAlbum
@@ -191,6 +199,11 @@ enum class ImageType : int {
     AlbumBooklet         = 38
 };
 
+inline uint qHash(const ImageType& type, uint seed)
+{
+    return qHash(static_cast<int>(type), seed);
+}
+
 // The filter numbers have to be unique for MovieFilters, TvShowFilters and ConcertFilters
 enum class MovieFilters : int
 {
@@ -226,7 +239,8 @@ enum class MovieFilters : int
     HasSubtitle         = 33,
     HasExternalSubtitle = 34,
     VideoCodec          = 35,
-    TmdbId              = 36
+    TmdbId              = 36,
+    OriginalTitle       = 37
 };
 // clang-format on
 

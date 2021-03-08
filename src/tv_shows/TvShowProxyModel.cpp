@@ -85,7 +85,7 @@ bool TvShowProxyModel::hasAcceptedChildren(int source_row, const QModelIndex& so
 /// \brief Sort function for the TV show model. Sorts TV shows by name.
 bool TvShowProxyModel::lessThan(const QModelIndex& left, const QModelIndex& right) const
 {
-    auto model = dynamic_cast<TvShowModel*>(sourceModel());
+    auto* model = dynamic_cast<TvShowModel*>(sourceModel());
     TvShowBaseModelItem& leftItem = model->getItem(left);
     TvShowBaseModelItem& rightItem = model->getItem(right);
 
@@ -115,11 +115,8 @@ bool TvShowProxyModel::lessThan(const QModelIndex& left, const QModelIndex& righ
         QString::localeAwareCompare(sourceModel()->data(left).toString(), sourceModel()->data(right).toString()) < 0);
 }
 
-/**
- * \brief Sets active filters
- */
 void TvShowProxyModel::setFilter(QVector<Filter*> filters, QString text)
 {
-    m_filters = filters;
-    m_filterText = text;
+    m_filters = std::move(filters);
+    m_filterText = std::move(text);
 }

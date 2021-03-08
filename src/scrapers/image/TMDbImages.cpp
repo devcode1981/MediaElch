@@ -1,20 +1,34 @@
 #include "TMDbImages.h"
 
-#include "scrapers/movie/TMDb.h"
+#include "scrapers/movie/tmdb/TmdbMovie.h"
 #include "settings/Settings.h"
 
-TMDbImages::TMDbImages(QObject* parent)
-{
-    setParent(parent);
-    m_provides = {ImageType::MovieBackdrop, //
-        ImageType::MoviePoster,             //
-        ImageType::ConcertBackdrop,         //
-        ImageType::ConcertPoster};
-    m_searchResultLimit = 0;
-    m_tmdb = new TMDb(this);
-    m_dummyMovie = new Movie({}, this);
+namespace mediaelch {
+namespace scraper {
 
-    m_supportedLanguages = {"ar-AE",
+QString TMDbImages::ID = "images.tmdb";
+
+TMDbImages::TMDbImages(QObject* parent) : ImageProvider(parent)
+{
+    m_meta.identifier = ID;
+    m_meta.name = "TMDb Images";
+    m_meta.description = tr("The Movie Database (TMDb) is a community built movie and TV database. "
+                            "Every piece of data has been added by our amazing community dating back to 2008. "
+                            "TMDb's strong international focus and breadth of data is largely unmatched and "
+                            "something we're incredibly proud of. Put simply, we live and breathe community "
+                            "and that's precisely what makes us different.");
+    m_meta.website = "https://www.themoviedb.org/tv";
+    m_meta.termsOfService = "https://www.themoviedb.org/terms-of-use";
+    m_meta.privacyPolicy = "https://www.themoviedb.org/privacy-policy";
+    m_meta.help = "https://www.themoviedb.org/talk";
+    m_meta.supportedImageTypes = {  //
+        ImageType::MovieBackdrop,   //
+        ImageType::MoviePoster,     //
+        ImageType::ConcertBackdrop, //
+        ImageType::ConcertPoster};
+    // For officially supported languages, see:
+    // https://developers.themoviedb.org/3/configuration/get-primary-translations
+    m_meta.supportedLanguages = {"ar-AE",
         "ar-SA",
         "be-BY",
         "bg-BG",
@@ -46,6 +60,7 @@ TMDbImages::TMDbImages(QObject* parent)
         "he-IL",
         "hi-IN",
         "hu-HU",
+        "hr-HR",
         "id-ID",
         "it-IT",
         "ja-JP",
@@ -83,43 +98,19 @@ TMDbImages::TMDbImages(QObject* parent)
         "zh-HK",
         "zh-TW",
         "zu-ZA"};
+    m_meta.defaultLocale = Locale::English;
+
+    m_searchResultLimit = 0;
+    m_tmdb = new mediaelch::scraper::TmdbMovie(this);
+    m_dummyMovie = new Movie({}, this);
 
     connect(m_dummyMovie->controller(), &MovieController::sigInfoLoadDone, this, &TMDbImages::onLoadImagesFinished);
-    connect(m_tmdb, &TMDb::searchDone, this, &TMDbImages::onSearchMovieFinished);
+    connect(m_tmdb, &mediaelch::scraper::TmdbMovie::searchDone, this, &TMDbImages::onSearchMovieFinished);
 }
 
-QString TMDbImages::name() const
+const ImageProvider::ScraperMeta& TMDbImages::meta() const
 {
-    return QString("The Movie DB");
-}
-
-QUrl TMDbImages::siteUrl() const
-{
-    return QUrl("https://www.themoviedb.org");
-}
-
-QString TMDbImages::identifier() const
-{
-    return QString("images.tmdb");
-}
-
-mediaelch::Locale TMDbImages::defaultLanguage()
-{
-    return mediaelch::Locale::English;
-}
-
-const QVector<mediaelch::Locale>& TMDbImages::supportedLanguages()
-{
-    return m_supportedLanguages;
-}
-
-/**
- * \brief Returns a list of supported image types
- * \return List of supported image types
- */
-QVector<ImageType> TMDbImages::provides()
-{
-    return m_provides;
+    return m_meta;
 }
 
 /**
@@ -151,7 +142,7 @@ void TMDbImages::searchConcert(QString searchStr, int limit)
  * \param results List of results from scraper
  * \see TMDb::parseSearch
  */
-void TMDbImages::onSearchMovieFinished(QVector<ScraperSearchResult> results, ScraperSearchError error)
+void TMDbImages::onSearchMovieFinished(QVector<ScraperSearchResult> results, ScraperError error)
 {
     if (m_searchResultLimit == 0) {
         emit sigSearchDone(results, error);
@@ -169,7 +160,7 @@ void TMDbImages::moviePosters(TmdbId tmdbId)
     m_imageType = ImageType::MoviePoster;
     QSet<MovieScraperInfo> infos;
     infos << MovieScraperInfo::Poster;
-    QHash<MovieScraperInterface*, QString> ids;
+    QHash<mediaelch::scraper::MovieScraper*, QString> ids;
     ids.insert(nullptr, tmdbId.toString());
     m_tmdb->loadData(ids, m_dummyMovie, infos);
 }
@@ -183,7 +174,7 @@ void TMDbImages::movieBackdrops(TmdbId tmdbId)
     m_imageType = ImageType::MovieBackdrop;
     QSet<MovieScraperInfo> infos;
     infos << MovieScraperInfo::Backdrop;
-    QHash<MovieScraperInterface*, QString> ids;
+    QHash<mediaelch::scraper::MovieScraper*, QString> ids;
     ids.insert(nullptr, tmdbId.toString());
     m_tmdb->loadData(ids, m_dummyMovie, infos);
 }
@@ -302,76 +293,85 @@ void TMDbImages::concertCdArts(TmdbId tmdbId)
  * \param searchStr Search term
  * \param limit Number of results, if zero, all results are returned
  */
-void TMDbImages::searchTvShow(QString searchStr, int limit)
+void TMDbImages::searchTvShow(QString searchStr, mediaelch::Locale locale, int limit)
 {
     Q_UNUSED(searchStr);
     Q_UNUSED(limit);
+    Q_UNUSED(locale);
 }
 
-void TMDbImages::tvShowImages(TvShow* show, TvDbId tvdbId, QVector<ImageType> types)
+void TMDbImages::tvShowImages(TvShow* show, TvDbId tvdbId, QVector<ImageType> types, const mediaelch::Locale& locale)
 {
     Q_UNUSED(show);
     Q_UNUSED(tvdbId);
     Q_UNUSED(types);
+    Q_UNUSED(locale)
 }
 
 /**
  * \brief Load TV show posters
  * \param tvdbId The TV DB id
  */
-void TMDbImages::tvShowPosters(TvDbId tvdbId)
+void TMDbImages::tvShowPosters(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
 /**
  * \brief Load TV show backdrops
  * \param tvdbId The TV DB id
  */
-void TMDbImages::tvShowBackdrops(TvDbId tvdbId)
+void TMDbImages::tvShowBackdrops(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
 /**
  * \brief Load TV show logos
  * \param tvdbId The TV DB id
  */
-void TMDbImages::tvShowLogos(TvDbId tvdbId)
+void TMDbImages::tvShowLogos(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void TMDbImages::tvShowThumbs(TvDbId tvdbId)
+void TMDbImages::tvShowThumbs(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
 /**
  * \brief Load TV show clear arts
  * \param tvdbId The TV DB id
  */
-void TMDbImages::tvShowClearArts(TvDbId tvdbId)
+void TMDbImages::tvShowClearArts(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
 /**
  * \brief Load TV show character arts
  * \param tvdbId The TV DB id
  */
-void TMDbImages::tvShowCharacterArts(TvDbId tvdbId)
+void TMDbImages::tvShowCharacterArts(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
 /**
  * \brief Load TV show banners
  * \param tvdbId The TV DB id
  */
-void TMDbImages::tvShowBanners(TvDbId tvdbId)
+void TMDbImages::tvShowBanners(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
 /**
@@ -380,11 +380,15 @@ void TMDbImages::tvShowBanners(TvDbId tvdbId)
  * \param season Season number
  * \param episode Episode number
  */
-void TMDbImages::tvShowEpisodeThumb(TvDbId tvdbId, SeasonNumber season, EpisodeNumber episode)
+void TMDbImages::tvShowEpisodeThumb(TvDbId tvdbId,
+    SeasonNumber season,
+    EpisodeNumber episode,
+    const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
     Q_UNUSED(episode);
+    Q_UNUSED(locale)
 }
 
 /**
@@ -392,28 +396,32 @@ void TMDbImages::tvShowEpisodeThumb(TvDbId tvdbId, SeasonNumber season, EpisodeN
  * \param tvdbId The TV DB id
  * \param season Season number
  */
-void TMDbImages::tvShowSeason(TvDbId tvdbId, SeasonNumber season)
+void TMDbImages::tvShowSeason(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
-void TMDbImages::tvShowSeasonBanners(TvDbId tvdbId, SeasonNumber season)
+void TMDbImages::tvShowSeasonBanners(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
-void TMDbImages::tvShowSeasonThumbs(TvDbId tvdbId, SeasonNumber season)
+void TMDbImages::tvShowSeasonThumbs(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
-void TMDbImages::tvShowSeasonBackdrops(TvDbId tvdbId, SeasonNumber season)
+void TMDbImages::tvShowSeasonBackdrops(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
 bool TMDbImages::hasSettings() const
@@ -449,46 +457,49 @@ void TMDbImages::searchArtist(QString searchStr, int limit)
     Q_UNUSED(limit);
 }
 
-void TMDbImages::artistFanarts(QString mbId)
+void TMDbImages::artistFanarts(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void TMDbImages::artistLogos(QString mbId)
+void TMDbImages::artistLogos(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void TMDbImages::artistThumbs(QString mbId)
+void TMDbImages::artistThumbs(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void TMDbImages::albumCdArts(QString mbId)
+void TMDbImages::albumCdArts(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void TMDbImages::albumThumbs(QString mbId)
+void TMDbImages::albumThumbs(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void TMDbImages::artistImages(Artist* artist, QString mbId, QVector<ImageType> types)
+void TMDbImages::artistImages(Artist* artist, MusicBrainzId mbId, QVector<ImageType> types)
 {
     Q_UNUSED(artist);
     Q_UNUSED(mbId);
     Q_UNUSED(types);
 }
 
-void TMDbImages::albumImages(Album* album, QString mbId, QVector<ImageType> types)
+void TMDbImages::albumImages(Album* album, MusicBrainzId mbId, QVector<ImageType> types)
 {
     Q_UNUSED(album);
     Q_UNUSED(mbId);
     Q_UNUSED(types);
 }
 
-void TMDbImages::albumBooklets(QString mbId)
+void TMDbImages::albumBooklets(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
+
+} // namespace scraper
+} // namespace mediaelch

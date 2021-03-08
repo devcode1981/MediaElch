@@ -218,7 +218,7 @@ void MusicWidgetArtist::onStartScraperSearch()
 
     if (searchWidget->result() == QDialog::Accepted) {
         onSetEnabled(false);
-        m_artist->controller()->loadData(searchWidget->scraperId(),
+        m_artist->controller()->loadData(MusicBrainzId(searchWidget->scraperId()),
             Manager::instance()->scrapers().musicScrapers().at(searchWidget->scraperNo()),
             searchWidget->infosToLoad());
         searchWidget->deleteLater();
@@ -246,7 +246,7 @@ void MusicWidgetArtist::updateArtistInfo()
     setContent(ui->yearsActive, m_artist->yearsActive());
     setContent(ui->disbanded, m_artist->disbanded());
     setContent(ui->died, m_artist->died());
-    setContent(ui->musicBrainzId, m_artist->mbId());
+    setContent(ui->musicBrainzId, m_artist->mbId().toString());
     ui->biography->blockSignals(true);
     ui->biography->setPlainText(m_artist->biography());
     ui->biography->blockSignals(false);
@@ -304,7 +304,7 @@ void MusicWidgetArtist::onItemChanged(QString text)
         return;
     }
 
-    auto lineEdit = dynamic_cast<QLineEdit*>(sender());
+    auto* lineEdit = dynamic_cast<QLineEdit*>(sender());
     if (lineEdit == nullptr) {
         return;
     }
@@ -323,7 +323,7 @@ void MusicWidgetArtist::onItemChanged(QString text)
     } else if (property == "died") {
         m_artist->setDied(text);
     } else if (property == "mbid") {
-        m_artist->setMbId(text);
+        m_artist->setMbId(MusicBrainzId(text));
     }
 
     ui->buttonRevert->setVisible(true);
@@ -391,23 +391,20 @@ void MusicWidgetArtist::onChooseImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(image->imageType());
-    imageDialog->clear();
     imageDialog->setArtist(m_artist);
 
     if (!m_artist->images(image->imageType()).isEmpty()) {
-        imageDialog->setDownloads(m_artist->images(image->imageType()));
-    } else {
-        imageDialog->setDownloads(QVector<Poster>());
+        imageDialog->setDefaultDownloads(m_artist->images(image->imageType()));
     }
 
-    imageDialog->exec(image->imageType());
+    imageDialog->execWithType(image->imageType());
     const int exitCode = imageDialog->result();
     const QUrl imageUrl = imageDialog->imageUrl();
     imageDialog->deleteLater();
@@ -425,7 +422,7 @@ void MusicWidgetArtist::onDeleteImage()
         return;
     }
 
-    auto image = dynamic_cast<ClosableImage*>(QObject::sender());
+    auto* image = dynamic_cast<ClosableImage*>(QObject::sender());
     if (image == nullptr) {
         return;
     }
@@ -522,7 +519,7 @@ void MusicWidgetArtist::onSetImage(Artist* artist, ImageType type, QByteArray im
 
 void MusicWidgetArtist::onRemoveExtraFanart(QByteArray image)
 {
-    if (m_artist == nullptr) {
+    if (m_artist.isNull()) {
         return;
     }
     m_artist->removeExtraFanart(image);
@@ -531,7 +528,7 @@ void MusicWidgetArtist::onRemoveExtraFanart(QByteArray image)
 
 void MusicWidgetArtist::onRemoveExtraFanart(QString file)
 {
-    if (m_artist == nullptr) {
+    if (m_artist.isNull()) {
         return;
     }
     m_artist->removeExtraFanart(file);
@@ -540,18 +537,17 @@ void MusicWidgetArtist::onRemoveExtraFanart(QString file)
 
 void MusicWidgetArtist::onAddExtraFanart()
 {
-    if (m_artist == nullptr) {
+    if (m_artist.isNull()) {
         return;
     }
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(ImageType::ArtistExtraFanart);
-    imageDialog->clear();
     imageDialog->setMultiSelection(true);
     imageDialog->setArtist(m_artist);
-    imageDialog->setDownloads(m_artist->images(ImageType::ArtistFanart));
+    imageDialog->setDefaultDownloads(m_artist->images(ImageType::ArtistFanart));
 
-    imageDialog->exec(ImageType::ArtistFanart);
+    imageDialog->execWithType(ImageType::ArtistFanart);
     const int exitCode = imageDialog->result();
     const QVector<QUrl> imageUrls = imageDialog->imageUrls();
     imageDialog->deleteLater();
@@ -566,7 +562,7 @@ void MusicWidgetArtist::onAddExtraFanart()
 
 void MusicWidgetArtist::onExtraFanartDropped(QUrl imageUrl)
 {
-    if (m_artist == nullptr) {
+    if (m_artist.isNull()) {
         return;
     }
     ui->fanarts->setLoading(true);
@@ -577,7 +573,7 @@ void MusicWidgetArtist::onExtraFanartDropped(QUrl imageUrl)
 
 void MusicWidgetArtist::onAddAlbum()
 {
-    if (m_artist == nullptr) {
+    if (m_artist.isNull()) {
         return;
     }
 
@@ -601,13 +597,13 @@ void MusicWidgetArtist::onAddAlbum()
 
 void MusicWidgetArtist::onRemoveAlbum()
 {
-    int row = ui->discography->currentRow();
-    if ((m_artist == nullptr) || row < 0 || row >= ui->discography->rowCount()
+    const int row = ui->discography->currentRow();
+    if ((m_artist.isNull()) || row < 0 || row >= ui->discography->rowCount()
         || !ui->discography->currentItem()->isSelected()) {
         return;
     }
 
-    auto album = ui->discography->item(row, 0)->data(Qt::UserRole).value<DiscographyAlbum*>();
+    auto* album = ui->discography->item(row, 0)->data(Qt::UserRole).value<DiscographyAlbum*>();
     if (album == nullptr) {
         return;
     }
@@ -620,7 +616,7 @@ void MusicWidgetArtist::onRemoveAlbum()
 
 void MusicWidgetArtist::onAlbumEdited(QTableWidgetItem* item)
 {
-    auto album = ui->discography->item(item->row(), 0)->data(Qt::UserRole).value<DiscographyAlbum*>();
+    auto* album = ui->discography->item(item->row(), 0)->data(Qt::UserRole).value<DiscographyAlbum*>();
     if (item->column() == 0) {
         album->title = item->text();
     } else if (item->column() == 1) {

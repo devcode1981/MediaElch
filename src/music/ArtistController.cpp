@@ -6,7 +6,8 @@
 #include "globals/Manager.h"
 #include "media_centers/MediaCenterInterface.h"
 #include "music/Artist.h"
-#include "scrapers/music/MusicScraperInterface.h"
+#include "scrapers/image/FanartTvMusic.h"
+#include "scrapers/music/MusicScraper.h"
 
 #include <QDebug>
 #include <QFileInfo>
@@ -16,16 +17,18 @@ ArtistController::ArtistController(Artist* parent) :
     m_artist{parent},
     m_infoLoaded{false},
     m_infoFromNfoLoaded{false},
-    m_downloadManager{new DownloadManager(this)},
-    m_downloadsInProgress{false},
-    m_downloadsSize{0}
+    m_downloadManager{new DownloadManager(this)}
 {
-    connect(m_downloadManager, &DownloadManager::sigDownloadFinished, this, &ArtistController::onDownloadFinished);
+    connect(m_downloadManager,
+        &DownloadManager::sigDownloadFinished,
+        this,
+        &ArtistController::onDownloadFinished,
+        static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
     connect(m_downloadManager,
         &DownloadManager::allDownloadsFinished,
         this,
         &ArtistController::onAllDownloadsFinished,
-        Qt::UniqueConnection);
+        static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
 }
 
 bool ArtistController::loadData(MediaCenterInterface* mediaCenterInterface, bool force, bool reloadFromNfo)
@@ -37,7 +40,7 @@ bool ArtistController::loadData(MediaCenterInterface* mediaCenterInterface, bool
 
     m_artist->blockSignals(true);
 
-    bool infoLoaded;
+    bool infoLoaded = false;
     if (reloadFromNfo) {
         infoLoaded = mediaCenterInterface->loadArtist(m_artist);
     } else {
@@ -149,13 +152,15 @@ bool ArtistController::downloadsInProgress() const
     return m_downloadsInProgress;
 }
 
-void ArtistController::loadData(QString id, MusicScraperInterface* scraperInterface, QSet<MusicScraperInfo> infos)
+void ArtistController::loadData(MusicBrainzId id,
+    mediaelch::scraper::MusicScraper* scraperInterface,
+    QSet<MusicScraperInfo> infos)
 {
     m_infosToLoad = infos;
     scraperInterface->loadData(id, m_artist, infos);
 }
 
-void ArtistController::scraperLoadDone(MusicScraperInterface* scraper)
+void ArtistController::scraperLoadDone(mediaelch::scraper::MusicScraper* scraper)
 {
     emit sigInfoLoadDone(m_artist);
 
@@ -181,10 +186,11 @@ void ArtistController::scraperLoadDone(MusicScraperInterface* scraper)
         m_artist->clear({MusicScraperInfo::Logo});
     }
 
-    if (!images.isEmpty() && !m_artist->mbId().isEmpty()) {
-        ImageProviderInterface* imageProvider = nullptr;
-        for (ImageProviderInterface* interface : Manager::instance()->imageProviders()) {
-            if (interface->identifier() == "images.fanarttv-music_lib") {
+    if (!images.isEmpty() && m_artist->mbId().isValid()) {
+        mediaelch::scraper::ImageProvider* imageProvider = nullptr;
+        const auto& imageProviders = Manager::instance()->imageProviders();
+        for (auto* interface : imageProviders) {
+            if (interface->meta().identifier == mediaelch::scraper::FanartTvMusic::ID) {
                 imageProvider = interface;
                 break;
             }
@@ -194,7 +200,7 @@ void ArtistController::scraperLoadDone(MusicScraperInterface* scraper)
             return;
         }
         connect(imageProvider,
-            &ImageProviderInterface::sigArtistImagesLoaded,
+            &mediaelch::scraper::ImageProvider::sigArtistImagesLoaded,
             this,
             &ArtistController::onFanartLoadDone,
             Qt::UniqueConnection);

@@ -11,26 +11,11 @@
 #include "media_centers/kodi/ConcertXmlReader.h"
 #include "media_centers/kodi/ConcertXmlWriter.h"
 #include "media_centers/kodi/EpisodeXmlReader.h"
+#include "media_centers/kodi/EpisodeXmlWriter.h"
 #include "media_centers/kodi/MovieXmlReader.h"
+#include "media_centers/kodi/MovieXmlWriter.h"
 #include "media_centers/kodi/TvShowXmlReader.h"
-#include "media_centers/kodi/v16/AlbumXmlWriterV16.h"
-#include "media_centers/kodi/v16/ArtistXmlWriterV16.h"
-#include "media_centers/kodi/v16/ConcertXmlWriterV16.h"
-#include "media_centers/kodi/v16/EpisodeXmlWriterV16.h"
-#include "media_centers/kodi/v16/MovieXmlWriterV16.h"
-#include "media_centers/kodi/v16/TvShowXmlWriterV16.h"
-#include "media_centers/kodi/v17/AlbumXmlWriterV17.h"
-#include "media_centers/kodi/v17/ArtistXmlWriterV17.h"
-#include "media_centers/kodi/v17/ConcertXmlWriterV17.h"
-#include "media_centers/kodi/v17/EpisodeXmlWriterV17.h"
-#include "media_centers/kodi/v17/MovieXmlWriterV17.h"
-#include "media_centers/kodi/v17/TvShowXmlWriterV17.h"
-#include "media_centers/kodi/v18/AlbumXmlWriterV18.h"
-#include "media_centers/kodi/v18/ArtistXmlWriterV18.h"
-#include "media_centers/kodi/v18/ConcertXmlWriterV18.h"
-#include "media_centers/kodi/v18/EpisodeXmlWriterV18.h"
-#include "media_centers/kodi/v18/MovieXmlWriterV18.h"
-#include "media_centers/kodi/v18/TvShowXmlWriterV18.h"
+#include "media_centers/kodi/TvShowXmlWriter.h"
 #include "movies/Movie.h"
 #include "settings/Settings.h"
 #include "tv_shows/TvShow.h"
@@ -41,6 +26,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QXmlStreamReader>
 #include <QXmlStreamWriter>
 #include <array>
 #include <memory>
@@ -57,28 +43,14 @@ void KodiXml::setVersion(mediaelch::KodiVersion version)
     m_version = version;
 }
 
-/// \brief Checks if our MediaCenterPlugin supports a feature
-/// \param feature Feature to check
-/// \return Feature is supported or not
-bool KodiXml::hasFeature(MediaCenterFeature feature)
-{
-    Q_UNUSED(feature);
-    return true;
-}
-
 QByteArray KodiXml::getMovieXml(Movie* movie)
 {
-    using namespace mediaelch;
-    // \todo(bugwelle):
-    // I'm fully aware that this is bad coding style but writing this clean
-    // requires so much refactoring that writing this whole feature would be easier.
-    // It's on my todo list to refactor this. Maybe into a Kodi factory.
-    std::unique_ptr<kodi::MovieXmlWriter> writer;
-    switch (m_version.version()) {
-    case KodiVersion::v16: writer = std::make_unique<kodi::MovieXmlWriterV16>(*movie); break;
-    case KodiVersion::v17: writer = std::make_unique<kodi::MovieXmlWriterV17>(*movie); break;
-    case KodiVersion::v18: writer = std::make_unique<kodi::MovieXmlWriterV18>(*movie); break;
-    }
+    // TODO: Don't use settings here.
+    setVersion(Settings::instance()->kodiSettings().kodiVersion());
+    auto writer = std::make_unique<mediaelch::kodi::MovieXmlWriterGeneric>(m_version, *movie);
+    writer->setWriteThumbUrlsToNfo(Settings::instance()->advanced()->writeThumbUrlsToNfo());
+    writer->setUseFirstStudioOnly(Settings::instance()->advanced()->useFirstStudioOnly());
+    writer->setIgnoreDuplicateOriginalTitle(Settings::instance()->ignoreDuplicateOriginalTitle());
     return writer->getMovieXml();
 }
 
@@ -444,10 +416,22 @@ void KodiXml::loadStreamDetails(StreamDetails* streamDetails, QDomElement elem)
 /// \brief Writes streamdetails to xml stream
 /// \param xml XML Stream
 /// \param streamDetails Stream Details object
-void KodiXml::writeStreamDetails(QXmlStreamWriter& xml, StreamDetails* streamDetails)
+void KodiXml::writeStreamDetails(QXmlStreamWriter& xml,
+    StreamDetails* streamDetails,
+    const QVector<Subtitle*>& subtitles,
+    bool hasStreamDetails)
 {
-    if (streamDetails->videoDetails().isEmpty() && streamDetails->audioDetails().isEmpty()
-        && streamDetails->subtitleDetails().isEmpty()) {
+    if (streamDetails == nullptr
+        || (streamDetails->videoDetails().isEmpty() && streamDetails->audioDetails().isEmpty()
+            && streamDetails->subtitleDetails().isEmpty())) {
+        // We still write <fileinfo> and <streamdetails> because otherwise MediaElch
+        // will always mark the media item as changed.
+        if (hasStreamDetails) {
+            xml.writeStartElement("fileinfo");
+            xml.writeStartElement("streamdetails");
+            xml.writeEndElement();
+            xml.writeEndElement();
+        }
         return;
     }
 
@@ -507,99 +491,16 @@ void KodiXml::writeStreamDetails(QXmlStreamWriter& xml, StreamDetails* streamDet
         xml.writeEndElement();
     }
 
-    xml.writeEndElement();
-    xml.writeEndElement();
-}
-
-void KodiXml::writeStreamDetails(QDomDocument& doc, const StreamDetails* streamDetails, QVector<Subtitle*> subtitles)
-{
-    removeChildNodes(doc, "fileinfo");
-
-    if (streamDetails == nullptr
-        || (streamDetails->videoDetails().isEmpty() && streamDetails->audioDetails().isEmpty()
-            && streamDetails->subtitleDetails().isEmpty() && subtitles.isEmpty())) {
-        return;
-    }
-
-    QDomElement elemFi = doc.createElement("fileinfo");
-    QDomElement elemSd = doc.createElement("streamdetails");
-
-    QDomElement elemVideo = doc.createElement("video");
-    QMapIterator<StreamDetails::VideoDetails, QString> itVideo(streamDetails->videoDetails());
-    while (itVideo.hasNext()) {
-        itVideo.next();
-        if (itVideo.key() == StreamDetails::VideoDetails::Width && itVideo.value().toInt() == 0) {
-            continue;
-        }
-        if (itVideo.key() == StreamDetails::VideoDetails::Height && itVideo.value().toInt() == 0) {
-            continue;
-        }
-        if (itVideo.key() == StreamDetails::VideoDetails::DurationInSeconds && itVideo.value().toInt() == 0) {
-            continue;
-        }
-        if (itVideo.value().isEmpty()) {
-            continue;
-        }
-
-        QString value = itVideo.value();
-
-        if (itVideo.key() == StreamDetails::VideoDetails::Aspect) {
-            value = value.replace(",", ".");
-        }
-
-        QDomElement elem = doc.createElement(StreamDetails::detailToString(itVideo.key()));
-        elem.appendChild(doc.createTextNode(value));
-        elemVideo.appendChild(elem);
-    }
-    elemSd.appendChild(elemVideo);
-
-    for (int i = 0, n = streamDetails->audioDetails().count(); i < n; ++i) {
-        QDomElement elemAudio = doc.createElement("audio");
-        QMapIterator<StreamDetails::AudioDetails, QString> itAudio(streamDetails->audioDetails().at(i));
-        while (itAudio.hasNext()) {
-            itAudio.next();
-            if (itAudio.value().isEmpty()) {
-                continue;
-            }
-
-            QDomElement elem = doc.createElement(StreamDetails::detailToString(itAudio.key()));
-            elem.appendChild(doc.createTextNode(itAudio.value()));
-            elemAudio.appendChild(elem);
-        }
-        elemSd.appendChild(elemAudio);
-    }
-
-    for (int i = 0, n = streamDetails->subtitleDetails().count(); i < n; ++i) {
-        QDomElement elemSubtitle = doc.createElement("subtitle");
-        QMapIterator<StreamDetails::SubtitleDetails, QString> itSubtitle(streamDetails->subtitleDetails().at(i));
-        while (itSubtitle.hasNext()) {
-            itSubtitle.next();
-            if (itSubtitle.value().isEmpty()) {
-                continue;
-            }
-
-            QDomElement elem = doc.createElement(StreamDetails::detailToString(itSubtitle.key()));
-            elem.appendChild(doc.createTextNode(itSubtitle.value()));
-            elemSubtitle.appendChild(elem);
-        }
-        elemSd.appendChild(elemSubtitle);
-    }
 
     for (Subtitle* subtitle : subtitles) {
-        QDomElement elemSubtitle = doc.createElement("subtitle");
-        QDomElement elem = doc.createElement("language");
-        elem.appendChild(doc.createTextNode(subtitle->language()));
-        elemSubtitle.appendChild(elem);
-
-        QDomElement elem2 = doc.createElement("file");
-        elem2.appendChild(doc.createTextNode(subtitle->files().first()));
-        elemSubtitle.appendChild(elem2);
-
-        elemSd.appendChild(elemSubtitle);
+        xml.writeStartElement("subtitle");
+        xml.writeTextElement("language", subtitle->language());
+        xml.writeTextElement("file", subtitle->files().first());
+        xml.writeEndElement();
     }
 
-    elemFi.appendChild(elemSd);
-    appendXmlNode(doc, elemFi);
+    xml.writeEndElement();
+    xml.writeEndElement();
 }
 
 /**
@@ -625,17 +526,10 @@ QString KodiXml::actorImageName(Movie* movie, Actor actor)
 
 QByteArray KodiXml::getConcertXml(Concert* concert)
 {
-    using namespace mediaelch;
-    // \todo(bugwelle):
-    // I'm fully aware that this is bad coding style but writing this clean
-    // requires so much refactoring that writing this whole feature would be easier.
-    // It's on my todo list to refactor this. Maybe into a Kodi factory.
-    std::unique_ptr<kodi::ConcertXmlWriter> writer;
-    switch (m_version.version()) {
-    case KodiVersion::v16: writer = std::make_unique<kodi::ConcertXmlWriterV16>(*concert); break;
-    case KodiVersion::v17: writer = std::make_unique<kodi::ConcertXmlWriterV17>(*concert); break;
-    case KodiVersion::v18: writer = std::make_unique<kodi::ConcertXmlWriterV18>(*concert); break;
-    }
+    // TODO: Don't use settings here.
+    setVersion(Settings::instance()->kodiSettings().kodiVersion());
+    auto writer = std::make_unique<mediaelch::kodi::ConcertXmlWriterGeneric>(m_version, *concert);
+    writer->setWriteThumbUrlsToNfo(Settings::instance()->advanced()->writeThumbUrlsToNfo());
     return writer->getConcertXml();
 }
 
@@ -764,13 +658,14 @@ bool KodiXml::loadConcert(Concert* concert, QString initialNfoContent)
         nfoContent = initialNfoContent;
     }
 
-    QDomDocument domDoc;
-    domDoc.setContent(nfoContent);
-
-    mediaelch::kodi::ConcertXmlReader reader(*concert);
-    reader.parseNfoDom(domDoc);
-
-    concert->setStreamDetailsLoaded(loadStreamDetails(concert->streamDetails(), domDoc));
+    if (!nfoContent.isEmpty()) {
+        QXmlStreamReader reader(nfoContent);
+        mediaelch::kodi::ConcertXmlReader concertReader(*concert);
+        concertReader.parse(reader);
+        if (reader.hasError()) {
+            qCritical() << "[KodiXml] Error parsing NFO file" << reader.errorString();
+        }
+    }
 
     // Existence of images
     if (initialNfoContent.isEmpty()) {
@@ -843,9 +738,13 @@ bool KodiXml::loadTvShow(TvShow* show, QString initialNfoContent)
                 break;
             }
         }
+        if (nfoFile.isEmpty()) {
+            // Movie has no NFO
+            return false;
+        }
         QFile file(nfoFile);
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            qWarning() << "[KodiXml] Nfo file could not be opened for reading" << nfoFile;
+            qWarning() << "[KodiXml] NFO file could not be opened for reading" << nfoFile;
             return false;
         }
         nfoContent = QString::fromUtf8(file.readAll());
@@ -967,7 +866,7 @@ bool KodiXml::saveTvShow(TvShow* show)
         }
         QFile file(saveFilePath);
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            qWarning() << "[KodiXml] Nfo file could not be openend for writing" << file.fileName();
+            qWarning() << "[KodiXml] NFO file could not be openend for writing" << file.fileName();
             return false;
         }
         file.write(xmlContent);
@@ -1081,7 +980,7 @@ bool KodiXml::saveTvShowEpisode(TvShowEpisode* episode)
         }
         QFile file(saveFilePath);
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            qWarning() << "[KodiXml] Nfo file could not be opened for writing" << saveFileName;
+            qWarning() << "[KodiXml] NFO file could not be opened for writing" << saveFileName;
             return false;
         }
         file.write(xmlContent);
@@ -1138,13 +1037,10 @@ bool KodiXml::saveTvShowEpisode(TvShowEpisode* episode)
 
 QByteArray KodiXml::getTvShowXml(TvShow* show)
 {
-    using namespace mediaelch;
-    std::unique_ptr<kodi::TvShowXmlWriter> writer;
-    switch (m_version.version()) {
-    case KodiVersion::v16: writer = std::make_unique<kodi::TvShowXmlWriterV16>(*show); break;
-    case KodiVersion::v17: writer = std::make_unique<kodi::TvShowXmlWriterV17>(*show); break;
-    case KodiVersion::v18: writer = std::make_unique<kodi::TvShowXmlWriterV18>(*show); break;
-    }
+    // TODO: Don't use settings here.
+    setVersion(Settings::instance()->kodiSettings().kodiVersion());
+    auto writer = std::make_unique<mediaelch::kodi::TvShowXmlWriterGeneric>(m_version, *show);
+    writer->setWriteThumbUrlsToNfo(Settings::instance()->advanced()->writeThumbUrlsToNfo());
     return writer->getTvShowXml();
 }
 
@@ -1153,13 +1049,11 @@ QByteArray KodiXml::getTvShowXml(TvShow* show)
 ///        to the same document to merge information.
 QByteArray KodiXml::getEpisodeXml(const QVector<TvShowEpisode*>& episodes)
 {
-    using namespace mediaelch;
-    std::unique_ptr<kodi::EpisodeXmlWriter> writer;
-    switch (m_version.version()) {
-    case KodiVersion::v16: writer = std::make_unique<kodi::EpisodeXmlWriterV16>(episodes); break;
-    case KodiVersion::v17: writer = std::make_unique<kodi::EpisodeXmlWriterV17>(episodes); break;
-    case KodiVersion::v18: writer = std::make_unique<kodi::EpisodeXmlWriterV18>(episodes); break;
-    }
+    // TODO: Don't use settings here.
+    setVersion(Settings::instance()->kodiSettings().kodiVersion());
+    auto writer = std::make_unique<mediaelch::kodi::EpisodeXmlWriterGeneric>(m_version, episodes);
+    writer->setWriteThumbUrlsToNfo(Settings::instance()->advanced()->writeThumbUrlsToNfo());
+    writer->setUsePlotForOutline(Settings::instance()->usePlotForOutline());
     return writer->getEpisodeXml();
 }
 
@@ -1823,103 +1717,26 @@ bool KodiXml::saveAlbum(Album* album)
 
 QByteArray KodiXml::getArtistXml(Artist* artist)
 {
-    using namespace mediaelch;
-    // \todo(bugwelle):
-    // I'm fully aware that this is bad coding style but writing this clean
-    // requires so much refactoring that writing this whole feature would be easier.
-    // It's on my todo list to refactor this. Maybe into a Kodi factory.
-    std::unique_ptr<kodi::ArtistXmlWriter> writer;
-    switch (m_version.version()) {
-    case KodiVersion::v16: writer = std::make_unique<kodi::ArtistXmlWriterV16>(*artist); break;
-    case KodiVersion::v17: writer = std::make_unique<kodi::ArtistXmlWriterV17>(*artist); break;
-    case KodiVersion::v18: writer = std::make_unique<kodi::ArtistXmlWriterV18>(*artist); break;
-    }
+    // TODO: Don't use settings here.
+    setVersion(Settings::instance()->kodiSettings().kodiVersion());
+    auto writer = std::make_unique<mediaelch::kodi::ArtistXmlWriterGeneric>(m_version, *artist);
+    writer->setWriteThumbUrlsToNfo(Settings::instance()->advanced()->writeThumbUrlsToNfo());
     return writer->getArtistXml();
 }
 
 QByteArray KodiXml::getAlbumXml(Album* album)
 {
-    using namespace mediaelch;
-    // \todo(bugwelle):
-    // I'm fully aware that this is bad coding style but writing this clean
-    // requires so much refactoring that writing this whole feature would be easier.
-    // It's on my todo list to refactor this. Maybe into a Kodi factory.
-    std::unique_ptr<kodi::AlbumXmlWriter> writer;
-    switch (m_version.version()) {
-    case KodiVersion::v16: writer = std::make_unique<kodi::AlbumXmlWriterV16>(*album); break;
-    case KodiVersion::v17: writer = std::make_unique<kodi::AlbumXmlWriterV17>(*album); break;
-    case KodiVersion::v18: writer = std::make_unique<kodi::AlbumXmlWriterV18>(*album); break;
-    }
+    // TODO: Don't use settings here.
+    setVersion(Settings::instance()->kodiSettings().kodiVersion());
+    auto writer = std::make_unique<mediaelch::kodi::AlbumXmlWriterGeneric>(m_version, *album);
+    writer->setWriteThumbUrlsToNfo(Settings::instance()->advanced()->writeThumbUrlsToNfo());
     return writer->getAlbumXml();
 }
 
-QDomElement KodiXml::setTextValue(QDomDocument& doc, const QString& name, const QString& value)
+void KodiXml::writeStringsAsOneTagEach(QXmlStreamWriter& xml, const QString& name, const QStringList& list)
 {
-    if (!doc.elementsByTagName(name).isEmpty()) {
-        if (!doc.elementsByTagName(name).at(0).firstChild().isText()) {
-            QDomText t = doc.createTextNode(value);
-            doc.elementsByTagName(name).at(0).appendChild(t);
-            return doc.elementsByTagName(name).at(0).toElement();
-        }
-        doc.elementsByTagName(name).at(0).firstChild().setNodeValue(value);
-        return doc.elementsByTagName(name).at(0).toElement();
-    }
-    return addTextValue(doc, name, value);
-}
-
-void KodiXml::setListValue(QDomDocument& doc, const QString& name, const QStringList& values)
-{
-    QDomNode rootNode = doc.firstChild();
-    while ((rootNode.nodeName() == "xml" || rootNode.isComment()) && !rootNode.isNull()) {
-        rootNode = rootNode.nextSibling();
-    }
-    QDomNodeList childNodes = rootNode.childNodes();
-    QVector<QDomNode> nodesToRemove;
-    for (int i = 0, n = childNodes.count(); i < n; ++i) {
-        if (childNodes.at(i).nodeName() == name) {
-            nodesToRemove.append(childNodes.at(i));
-        }
-    }
-    for (QDomNode& node : nodesToRemove) {
-        rootNode.removeChild(node);
-    }
-    for (const QString& style : values) {
-        addTextValue(doc, name, style);
-    }
-}
-
-QDomElement KodiXml::addTextValue(QDomDocument& doc, const QString& name, const QString& value)
-{
-    QDomElement elem = doc.createElement(name);
-    elem.appendChild(doc.createTextNode(value));
-    appendXmlNode(doc, elem);
-    return elem;
-}
-
-void KodiXml::appendXmlNode(QDomDocument& doc, QDomNode& node)
-{
-    QDomNode rootNode = doc.firstChild();
-    while ((rootNode.nodeName() == "xml" || rootNode.isComment()) && !rootNode.isNull()) {
-        rootNode = rootNode.nextSibling();
-    }
-    rootNode.appendChild(node);
-}
-
-void KodiXml::removeChildNodes(QDomDocument& doc, const QString& name)
-{
-    QDomNode rootNode = doc.firstChild();
-    while ((rootNode.nodeName() == "xml" || rootNode.isComment()) && !rootNode.isNull()) {
-        rootNode = rootNode.nextSibling();
-    }
-    QDomNodeList childNodes = rootNode.childNodes();
-    QVector<QDomNode> nodesToRemove;
-    for (int i = 0, n = childNodes.count(); i < n; ++i) {
-        if (childNodes.at(i).nodeName() == name) {
-            nodesToRemove.append(childNodes.at(i));
-        }
-    }
-    for (const QDomNode& node : nodesToRemove) {
-        rootNode.removeChild(node);
+    for (const QString& item : list) {
+        xml.writeTextElement(name, item);
     }
 }
 
@@ -1933,7 +1750,7 @@ void KodiXml::loadBooklets(Album* album)
     QDir dir(album->path().subDir("booklet").toString());
     QStringList filters{"*.jpg", "*.jpeg", "*.JPEG", "*.Jpeg", "*.JPeg"};
     for (const QString& file : dir.entryList(filters, QDir::Files | QDir::NoDotAndDotDot, QDir::Name)) {
-        auto img = new Image;
+        auto* img = new Image;
         img->setFileName(QDir::toNativeSeparators(dir.path() + "/" + file));
         album->bookletModel()->addImage(img);
     }

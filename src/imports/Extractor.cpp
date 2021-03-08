@@ -1,10 +1,11 @@
-#include "Extractor.h"
+#include "imports/Extractor.h"
+
+#include "settings/Settings.h"
 
 #include <QDebug>
 #include <QFileInfo>
 #include <QProcess>
-
-#include "settings/Settings.h"
+#include <QRegularExpression>
 
 Extractor::Extractor(QObject* parent) : QObject(parent)
 {
@@ -12,7 +13,7 @@ Extractor::Extractor(QObject* parent) : QObject(parent)
 
 Extractor::~Extractor()
 {
-    for (QProcess* process : m_processes) {
+    for (QProcess* process : asConst(m_processes)) {
         process->kill();
     }
 }
@@ -54,7 +55,7 @@ void Extractor::extract(QString baseName, QStringList files, QString password)
     parameters << file;
     // parameters << fi.path();
 
-    auto process = new QProcess(this);
+    auto* process = new QProcess(this);
     m_processes.append(process);
     connect(process, &QProcess::readyReadStandardOutput, this, &Extractor::onReadyRead);
     connect(process, &QProcess::readyReadStandardError, this, &Extractor::onReadyReadError);
@@ -70,9 +71,10 @@ void Extractor::onReadyRead()
 {
     auto* process = dynamic_cast<QProcess*>(QObject::sender());
     QString msg = process->readAllStandardOutput();
-    QRegExp rx("([0-9]*)%");
-    if (rx.indexIn(msg) != -1) {
-        emit sigProgress(process->property("baseName").toString(), rx.cap(1).toInt());
+    QRegularExpression rx("([0-9]*)%");
+    QRegularExpressionMatch match = rx.match(msg);
+    if (match.hasMatch()) {
+        emit sigProgress(process->property("baseName").toString(), match.captured(1).toInt());
     }
 }
 
@@ -98,7 +100,7 @@ void Extractor::onFinished(int exitCode, QProcess::ExitStatus status)
 
 void Extractor::stopExtraction(QString baseName)
 {
-    for (QProcess* process : m_processes) {
+    for (QProcess* process : asConst(m_processes)) {
         if (process->property("baseName").toString() == baseName) {
             process->setProperty("hasError", true);
             process->kill();

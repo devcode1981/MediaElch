@@ -29,37 +29,69 @@ static void initLogFile()
         QObject::tr("The logfile %1 could not be openend for writing.").arg(logFile));
 }
 
-static void loadStylesheet(QApplication& app)
+static void loadStylesheet(QApplication& app, const QString& customStylesheet)
 {
-    QFile file(":/src/ui/default.css");
+    QString filename = customStylesheet.isEmpty() ? ":/src/ui/default.css" : customStylesheet;
+    QFile file(filename);
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        if (!customStylesheet.isEmpty()) {
+            qInfo() << "Using custom stylesheet from:" << customStylesheet;
+        }
         app.setStyleSheet(file.readAll());
         file.close();
 
     } else {
-        qCritical() << "The default stylesheet could not be openend for reading.";
-        QMessageBox::critical(nullptr,
-            QObject::tr("Stylesheet could not be opened!"),
-            QObject::tr("The default stylesheet could not be openend for reading."));
+        qCritical() << "The stylesheet could not be openend for reading:" << filename;
+        const QString heading = QObject::tr("Stylesheet could not be opened!");
+        const QString body = customStylesheet.isEmpty()
+                                 ? QObject::tr("The default stylesheet could not be openend for reading.")
+                                 : QObject::tr("The custom stylesheet could not be openend for reading. Using: %1")
+                                       .arg(customStylesheet);
+        QMessageBox::critical(nullptr, heading, body);
     }
 }
 
-static void setupTranslation(const QString& filename)
+static void installTranslations(const QLocale& locale)
 {
-    auto* qtTranslator = new QTranslator(QCoreApplication::instance());
-    // advanced settings are already loaded in Setting's constructor.
-    QLocale locale = Settings::instance()->advanced()->locale();
-    if (qtTranslator->load(locale, filename, QLatin1String("_"), QLatin1String(":/i18n"), QLatin1String(".qm"))) {
-        QApplication::installTranslator(qtTranslator);
-    } else if (filename != "qt") {
-        // Only warn if "MediaElch" translation could not be loaded.
-        qWarning() << "[i18n] Could not load " << filename << "translation file for" << locale << locale.uiLanguages();
+    static QTranslator qtTranslator;
+    static QTranslator mediaelchTranslator;
+
+    // ------------------------------------------------------------------------
+    // Qt localization
+
+    // Note:
+    // If compiled, this path will point to Qt's installation directory.
+    // For MediaElch.app (if packaged as *.dmg), it will be MediaElch.app/Contents/translations
+    QString qtSearchDir = QLibraryInfo::location(QLibraryInfo::TranslationsPath);
+    const bool qtLoaded = qtTranslator.load(locale, "qt", "_", qtSearchDir, ".qm");
+    if (qtLoaded) {
+        QApplication::installTranslator(&qtTranslator);
+    }
+
+    // ------------------------------------------------------------------------
+    // MediaElch localization.  Allow the usage of a "local" qm file that can
+    // be used for testing.
+    const auto localFileName = QStringLiteral("%1%2MediaElch_local.qm") //
+                                   .arg(QCoreApplication::applicationDirPath(), QDir::separator());
+    const QFileInfo fi{localFileName};
+    bool i18nLoaded = false;
+    if (fi.isFile()) {
+        i18nLoaded = mediaelchTranslator.load(localFileName);
+    } else {
+        i18nLoaded = mediaelchTranslator.load(locale, "MediaElch", "_", ":/i18n/", ".qm");
+    }
+
+    if (i18nLoaded) {
+        QApplication::installTranslator(&mediaelchTranslator);
+    } else {
+        qWarning() << "Could NOT find MediaElch's translations for " << locale;
     }
 }
 
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
+    registerAllMetaTypes();
 
     QCoreApplication::setOrganizationName(mediaelch::constants::OrganizationName);
     QCoreApplication::setApplicationName(mediaelch::constants::AppName);
@@ -78,15 +110,14 @@ int main(int argc, char* argv[])
     // with translated values to the settings dialog.
     qInstallMessageHandler(mediaelch::messageHandler);
 
-    // MediaElch localization
-    setupTranslation(QLatin1String("qt"));
-    setupTranslation(QLatin1String("MediaElch"));
+    // Qt's and MediaElch's translations.
+    installTranslations(Settings::instance()->advanced()->locale());
 
     // Load the system's settings, e.g. window position, etc.
     Settings::instance()->loadSettings();
 
     initLogFile();
-    loadStylesheet(app);
+    loadStylesheet(app, Settings::instance()->advanced()->customStylesheet());
 
     MainWindow window;
     window.show();

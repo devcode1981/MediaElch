@@ -1,6 +1,20 @@
 #include "ImageDialog.h"
 #include "ui_ImageDialog.h"
 
+#include "concerts/Concert.h"
+#include "file/NameFormatter.h"
+#include "globals/Helper.h"
+#include "globals/Manager.h"
+#include "movies/Movie.h"
+#include "music/Album.h"
+#include "music/Artist.h"
+#include "network/NetworkRequest.h"
+#include "scrapers/image/ImageProvider.h"
+#include "tv_shows/TvShow.h"
+#include "tv_shows/TvShowEpisode.h"
+#include "ui/main/MainWindow.h"
+#include "ui/small_widgets/ImageLabel.h"
+
 #include <QBuffer>
 #include <QDebug>
 #include <QFileDialog>
@@ -8,26 +22,13 @@
 #include <QMovie>
 #include <QPainter>
 #include <QSize>
-#include <QStandardPaths>
 #include <QTimer>
 #include <QtCore/qmath.h>
 
-#include "concerts/Concert.h"
-#include "globals/Helper.h"
-#include "globals/Manager.h"
-#include "globals/NameFormatter.h"
-#include "movies/Movie.h"
-#include "music/Album.h"
-#include "music/Artist.h"
-#include "network/NetworkRequest.h"
-#include "scrapers/image/ImageProviderInterface.h"
-#include "tv_shows/TvShow.h"
-#include "tv_shows/TvShowEpisode.h"
-#include "ui/main/MainWindow.h"
-#include "ui/small_widgets/ImageLabel.h"
-
 ImageDialog::ImageDialog(QWidget* parent) : QDialog(parent), ui(new Ui::ImageDialog)
 {
+    using namespace mediaelch::scraper;
+
     ui->setupUi(this);
     ui->searchTerm->setType(MyLineEdit::TypeLoading);
     ui->results->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
@@ -57,6 +58,7 @@ ImageDialog::ImageDialog(QWidget* parent) : QDialog(parent), ui(new Ui::ImageDia
 
     connect(ui->gallery,       elchOverload<QString>(&ImageGallery::sigRemoveImage),  this, &ImageDialog::onImageClosed);
     connect(ui->imageProvider, elchOverload<int>(&QComboBox::currentIndexChanged),    this, &ImageDialog::onProviderChanged);
+    connect(ui->comboLanguage, elchOverload<int>(&QComboBox::currentIndexChanged),    this, &ImageDialog::onLanguageChanged);
     // clang-format on
 
     ui->btnAcceptImages->hide();
@@ -64,11 +66,12 @@ ImageDialog::ImageDialog(QWidget* parent) : QDialog(parent), ui(new Ui::ImageDia
     auto* movie = new QMovie(":/img/spinner.gif", QByteArray(), this);
     movie->start();
     ui->labelSpinner->setMovie(movie);
-    clearSearch();
+
     setImageType(ImageType::MoviePoster);
     m_currentDownloadReply = nullptr;
     m_multiSelection = false;
 
+    // create zoom out/in buttons and make them darker
     QPixmap zoomOut(":/img/zoom_out.png");
     QPixmap zoomIn(":/img/zoom_in.png");
     QPainter p;
@@ -83,111 +86,68 @@ ImageDialog::ImageDialog(QWidget* parent) : QDialog(parent), ui(new Ui::ImageDia
     ui->buttonZoomOut->setIcon(QIcon(zoomOut));
     ui->buttonZoomIn->setIcon(QIcon(zoomIn));
 
-    for (ImageProviderInterface* provider : Manager::instance()->imageProviders()) {
-        connect(provider, &ImageProviderInterface::sigSearchDone, this, &ImageDialog::onSearchFinished);
-        connect(provider, &ImageProviderInterface::sigImagesLoaded, this, &ImageDialog::onProviderImagesLoaded);
+    const auto& imageProviders = Manager::instance()->imageProviders();
+    for (ImageProvider* provider : imageProviders) {
+        connect(provider, &ImageProvider::sigSearchDone, this, &ImageDialog::onSearchFinished);
+        connect(provider, &ImageProvider::sigImagesLoaded, this, &ImageDialog::onProviderImagesLoaded);
     }
 }
 
-/**
- * \brief ImageDialog::~ImageDialog
- */
 ImageDialog::~ImageDialog()
 {
     delete ui;
 }
 
-int ImageDialog::exec()
+void ImageDialog::setDefaultDownloads(QVector<Poster> downloads)
 {
-    return 0;
+    m_defaultElements = downloads;
 }
 
-/**
- * \brief Executes the dialog and returns the result of QDialog::exec
- * \param type Type of the images (ImageDialogType)
- * \return Result of QDialog::exec
- */
-int ImageDialog::exec(ImageType type)
+int ImageDialog::execWithType(ImageType type)
 {
+    using namespace mediaelch::scraper;
+
     m_type = type;
 
-    auto* settings = Settings::instance()->settings();
-
     // set slider value
-    ui->previewSizeSlider->setValue(
-        settings->value(QString("ImageDialog/PreviewSize_%1").arg(static_cast<int>(m_type)), 8).toInt());
+    ui->previewSizeSlider->setValue( //
+        Settings::instance()
+            ->settings()
+            ->value(QString("ImageDialog/PreviewSize_%1").arg(static_cast<int>(m_type)), 8)
+            .toInt());
 
-    const QSize savedSize = settings->value("ImageDialog/Size").toSize();
-    const QPoint savedPos = settings->value("ImageDialog/Pos").toPoint();
+    resizeAndReposition();
 
-#ifdef Q_OS_MAC
-    constexpr bool isMac = true;
-#else
-    constexpr bool isMac = false;
-#endif
-
-    if (savedSize.isValid() && !savedSize.isNull() && !isMac) {
-        resize(savedSize);
-    } else {
-        // resize
-        QSize newSize;
-        newSize.setHeight(parentWidget()->size().height() - 50);
-        newSize.setWidth(qMin(1200, parentWidget()->size().width() - 100));
-        resize(newSize);
-    }
-
-    if (!savedPos.isNull() && !isMac) {
-        move(savedPos);
-    } else {
-        // Move to center
-        QWidget* window = MainWindow::instance();
-        const int xMove = (window->size().width() - size().width()) / 2;
-        move(window->x() + xMove, qMax(0, window->y() - 100));
-    }
-
-    // get image providers and setup combo box
     m_providers = Manager::instance()->imageProviders(type);
-
-    ui->imageProvider->blockSignals(true);
-    ui->imageProvider->clear();
-
-    if (hasDefaultImages() || !hasImageProvider()) {
-        ui->imageProvider->addItem(tr("Default"));
-        ui->imageProvider->setItemData(0, true, DataRole::isDefaultProvider);
-    }
-
-    for (ImageProviderInterface* provider : m_providers) {
-        int row = ui->imageProvider->count();
-        ui->imageProvider->addItem(provider->name());
-        ui->imageProvider->setItemData(row, QVariant::fromValue(provider), DataRole::providerPointer);
-        ui->imageProvider->setItemData(row, false, DataRole::isDefaultProvider);
-    }
-    ui->imageProvider->blockSignals(false);
-    updateSourceLink();
+    setupProviderCombo();
 
     ui->searchTerm->setLoading(false);
     ui->searchTerm->setReadOnly(!hasImageProvider());
     ui->searchTerm->setEnabled(hasImageProvider());
     ui->imageProvider->setEnabled(hasImageProvider());
-
+    if (!hasImageProvider()) {
+        ui->comboLanguage->setInvalid();
+    }
     // show image widget
     ui->stackedWidget->setCurrentIndex(1);
 
-    if (m_itemType == ItemType::Movie) {
+    if (m_itemType == ItemType::Movie && m_movie != nullptr) {
         ui->searchTerm->setText(formatSearchText(m_movie->name()));
-    } else if (m_itemType == ItemType::Concert) {
-        ui->searchTerm->setText(formatSearchText(m_concert->name()));
-    } else if (m_itemType == ItemType::TvShow) {
+    } else if (m_itemType == ItemType::Concert && m_concert != nullptr) {
+        ui->searchTerm->setText(formatSearchText(m_concert->title()));
+    } else if (m_itemType == ItemType::TvShow && m_tvShow != nullptr) {
         ui->searchTerm->setText(formatSearchText(m_tvShow->title()));
-    } else if (m_itemType == ItemType::TvShowEpisode) {
+    } else if (m_itemType == ItemType::TvShowEpisode && m_tvShowEpisode != nullptr) {
         ui->searchTerm->setText(formatSearchText(m_tvShowEpisode->tvShow()->title()));
-    } else if (m_itemType == ItemType::Album) {
+    } else if (m_itemType == ItemType::Album && m_album != nullptr) {
         ui->searchTerm->setText(formatSearchText(m_album->title()));
-    } else if (m_itemType == ItemType::Artist) {
+    } else if (m_itemType == ItemType::Artist && m_artist != nullptr) {
         ui->searchTerm->setText(formatSearchText(m_artist->name()));
     } else {
         ui->searchTerm->clear();
     }
+
+    renderTable();
 
     if (hasImageProvider()) {
         onSearch(true);
@@ -198,9 +158,6 @@ int ImageDialog::exec(ImageType type)
         showError(tr(
             "Neither an image provider nor previously scraped image URLs are available for the requested image type."));
     }
-
-    QDialog::show();
-    renderTable();
 
     return QDialog::exec();
 }
@@ -233,18 +190,6 @@ void ImageDialog::reject()
     QDialog::reject();
 }
 
-/**
- * \brief Clears the dialogs contents and cancels outstanding downloads
- */
-void ImageDialog::clear()
-{
-    m_imageUrls.clear();
-    setMultiSelection(false);
-    ui->gallery->clear();
-    ui->btnAcceptImages->hide();
-    clearSearch();
-}
-
 void ImageDialog::clearSearch()
 {
     cancelDownloads();
@@ -253,11 +198,6 @@ void ImageDialog::clearSearch()
     ui->table->setRowCount(0);
 }
 
-/**
- * \brief Return the url of the last clicked image
- * \return URL of the last image clicked
- * \see ImageDialog::imageClicked
- */
 QUrl ImageDialog::imageUrl()
 {
     return m_imageUrl;
@@ -274,17 +214,9 @@ void ImageDialog::resizeEvent(QResizeEvent* event)
     QDialog::resizeEvent(event);
 }
 
-/**
- * \brief Sets a list of images to be downloaded and shown
- * \param downloads List of images (downloads)
- * \param initial If true saves downloads as defaults
- */
-void ImageDialog::setDownloads(QVector<Poster> downloads, bool initial)
+void ImageDialog::setAndStartDownloads(QVector<Poster> downloads)
 {
     ui->stackedWidget->setCurrentIndex(1);
-    if (initial) {
-        m_defaultElements = downloads;
-    }
     for (const Poster& poster : downloads) {
         DownloadElement d;
         d.originalUrl = poster.originalUrl;
@@ -299,11 +231,11 @@ void ImageDialog::setDownloads(QVector<Poster> downloads, bool initial)
     }
     ui->labelLoading->setVisible(true);
     ui->labelSpinner->setVisible(true);
-    startNextDownload();
     renderTable();
     if (downloads.count() == 0) {
         ui->stackedWidget->setCurrentIndex(2);
     }
+    startNextDownload();
 }
 
 mediaelch::network::NetworkManager* ImageDialog::network()
@@ -311,9 +243,61 @@ mediaelch::network::NetworkManager* ImageDialog::network()
     return &m_network;
 }
 
-/**
- * \brief Starts the next download if there is one
- */
+void ImageDialog::setupProviderCombo()
+{
+    ui->imageProvider->blockSignals(true);
+    ui->imageProvider->clear();
+
+    if (hasDefaultImages() || !hasImageProvider()) {
+        ui->imageProvider->addItem(tr("Default"));
+        ui->imageProvider->setItemData(0, true, DataRole::isDefaultProvider);
+        // Not "nullptr" due to missing meta type on OpenSUSE Leap 42.3
+        ui->imageProvider->setItemData(0, QVariant::fromValue(0), DataRole::providerPointer);
+    }
+
+    for (mediaelch::scraper::ImageProvider* provider : asConst(m_providers)) {
+        int row = ui->imageProvider->count();
+        ui->imageProvider->addItem(provider->meta().name);
+        ui->imageProvider->setItemData(row, QVariant::fromValue(provider), DataRole::providerPointer);
+        ui->imageProvider->setItemData(row, false, DataRole::isDefaultProvider);
+    }
+    ui->imageProvider->blockSignals(false);
+    onProviderChanged(0);
+}
+
+void ImageDialog::resizeAndReposition()
+{
+    auto* settings = Settings::instance()->settings();
+
+    const QSize savedSize = settings->value("ImageDialog/Size").toSize();
+    const QPoint savedPos = settings->value("ImageDialog/Pos").toPoint();
+
+#ifdef Q_OS_MAC
+    constexpr bool isMac = true;
+#else
+    constexpr bool isMac = false;
+#endif
+
+    if (savedSize.isValid() && !savedSize.isNull() && !isMac) {
+        resize(savedSize);
+    } else {
+        // resize
+        QSize newSize;
+        newSize.setHeight(parentWidget()->size().height() - 50);
+        newSize.setWidth(qMin(1200, parentWidget()->size().width() - 100));
+        resize(newSize);
+    }
+
+    if (!savedPos.isNull() && !isMac) {
+        move(savedPos);
+    } else {
+        // Move to center
+        QWidget* window = MainWindow::instance();
+        const int xMove = (window->size().width() - size().width()) / 2;
+        move(window->x() + xMove, qMax(0, window->y() - 100));
+    }
+}
+
 void ImageDialog::startNextDownload()
 {
     qDebug() << "[ImageDialog] Start next download";
@@ -331,15 +315,15 @@ void ImageDialog::startNextDownload()
         ui->labelSpinner->setVisible(false);
         return;
     }
+
+    QUrl url =
+        m_elements[nextIndex].thumbUrl.isValid() ? m_elements[nextIndex].thumbUrl : m_elements[nextIndex].originalUrl;
+
     m_currentDownloadIndex = nextIndex;
-    m_currentDownloadReply = network()->get(mediaelch::network::requestWithDefaults(m_elements[nextIndex].thumbUrl));
+    m_currentDownloadReply = network()->get(mediaelch::network::requestWithDefaults(url));
     connect(m_currentDownloadReply, &QNetworkReply::finished, this, &ImageDialog::downloadFinished);
 }
 
-/**
- * \brief Called when a download has finished
- * Renders the table and displays the downloaded image and starts the next download
- */
 void ImageDialog::downloadFinished()
 {
     if (m_currentDownloadReply->error() == QNetworkReply::NoError) {
@@ -373,9 +357,6 @@ void ImageDialog::downloadFinished()
     startNextDownload();
 }
 
-/**
- * \brief Renders the table
- */
 void ImageDialog::renderTable()
 {
     const int cols = calcColumnCount();
@@ -392,9 +373,9 @@ void ImageDialog::renderTable()
         if (i % cols == 0) {
             ui->table->insertRow(row);
         }
-        auto item = new QTableWidgetItem;
+        auto* item = new QTableWidgetItem;
         item->setData(Qt::UserRole, m_elements[i].originalUrl);
-        auto label = new ImageLabel(ui->table);
+        auto* label = new ImageLabel(ui->table);
         if (!m_elements[i].pixmap.isNull()) {
             const int width = static_cast<int>((getColumnWidth() - 10) * helper::devicePixelRatio(this));
             QPixmap pixmap = m_elements[i].pixmap.scaledToWidth(width, Qt::SmoothTransformation);
@@ -438,7 +419,7 @@ int ImageDialog::getColumnWidth()
 void ImageDialog::imageClicked(int row, int col)
 {
     if (ui->table->item(row, col) == nullptr) {
-        qDebug() << "Invalid item";
+        qDebug() << "[ImageDialog] Invalid item";
         return;
     }
     QUrl url = ui->table->item(row, col)->data(Qt::UserRole).toUrl();
@@ -460,53 +441,34 @@ void ImageDialog::imageClicked(int row, int col)
     }
 }
 
-/**
- * \brief Sets the type of images
- * \param type Type of images
- */
 void ImageDialog::setImageType(ImageType type)
 {
     m_imageType = type;
 }
 
-/**
- * \brief Sets the current movie
- */
 void ImageDialog::setMovie(Movie* movie)
 {
     m_movie = movie;
     m_itemType = ItemType::Movie;
 }
 
-/**
- * \brief Sets the current concert
- */
 void ImageDialog::setConcert(Concert* concert)
 {
     m_concert = concert;
     m_itemType = ItemType::Concert;
 }
 
-/**
- * \brief Sets the current TV show
- */
 void ImageDialog::setTvShow(TvShow* show)
 {
     m_tvShow = show;
     m_itemType = ItemType::TvShow;
 }
 
-/**
- * \brief Set season number
- */
 void ImageDialog::setSeason(SeasonNumber season)
 {
     m_season = season;
 }
 
-/**
- * \brief Sets the current TV show episode
- */
 void ImageDialog::setTvShowEpisode(TvShowEpisode* episode)
 {
     m_tvShowEpisode = episode;
@@ -525,15 +487,12 @@ void ImageDialog::setAlbum(Album* album)
     m_itemType = ItemType::Album;
 }
 
-/**
- * \brief Cancels the current download and clears the download queue
- */
 void ImageDialog::cancelDownloads()
 {
     ui->labelLoading->setVisible(false);
     ui->labelSpinner->setVisible(false);
     bool running = false;
-    for (const DownloadElement& d : m_elements) {
+    for (const DownloadElement& d : asConst(m_elements)) {
         if (!d.downloaded) {
             running = true;
             break;
@@ -679,16 +638,43 @@ void ImageDialog::onProviderChanged(int index)
 
     const bool isDefaultProvider = ui->imageProvider->itemData(index, DataRole::isDefaultProvider).toBool();
 
+    auto* provider = ui->imageProvider->itemData(ui->imageProvider->currentIndex(), DataRole::providerPointer)
+                         .value<mediaelch::scraper::ImageProvider*>();
+
     ui->searchTerm->setReadOnly(isDefaultProvider);
     ui->searchTerm->setEnabled(!isDefaultProvider);
+
+    if (isDefaultProvider || provider == nullptr || provider->meta().supportedLanguages.isEmpty()) {
+        ui->comboLanguage->setInvalid();
+    } else {
+        auto* scraperSettings = Settings::instance()->scraperSettings(provider->meta().identifier);
+        mediaelch::Locale selectedLocale = scraperSettings != nullptr
+                                               ? scraperSettings->language(provider->meta().defaultLocale)
+                                               : provider->meta().defaultLocale;
+        ui->comboLanguage->setupLanguages(provider->meta().supportedLanguages, selectedLocale);
+    }
 
     if (isDefaultProvider) {
         // this is the default provider
         ui->stackedWidget->setCurrentIndex(1);
         ui->searchTerm->setLoading(false);
         clearSearch();
-        setDownloads(m_defaultElements);
+        setAndStartDownloads(m_defaultElements);
     } else {
+        ui->searchTerm->setFocus();
+        onSearch();
+    }
+}
+
+void ImageDialog::onLanguageChanged(int index)
+{
+    if (index < 0 || index >= ui->comboLanguage->count()) {
+        return;
+    }
+
+    const bool isDefaultProvider = ui->imageProvider->itemData(index, DataRole::isDefaultProvider).toBool();
+
+    if (!isDefaultProvider) {
         ui->searchTerm->setFocus();
         onSearch();
     }
@@ -696,7 +682,7 @@ void ImageDialog::onProviderChanged(int index)
 
 void ImageDialog::updateSourceLink()
 {
-    int index = ui->imageProvider->currentIndex();
+    const int index = ui->imageProvider->currentIndex();
     if (index < 0 || index >= ui->imageProvider->count()) {
         return;
     }
@@ -709,18 +695,16 @@ void ImageDialog::updateSourceLink()
         ui->noResultsLabel->setText(tr("No images found"));
 
     } else {
-        auto p = ui->imageProvider->itemData(ui->imageProvider->currentIndex(), DataRole::providerPointer)
-                     .value<ImageProviderInterface*>();
-        ui->imageSource->setText(tr("Images provided by <a href=\"%1\">%1</a>").arg(p->siteUrl().toString()));
+        auto* p = ui->imageProvider->itemData(ui->imageProvider->currentIndex(), DataRole::providerPointer)
+                      .value<mediaelch::scraper::ImageProvider*>();
+        ui->imageSource->setText(tr("Images provided by <a href=\"%1\">%1</a>").arg(p->meta().website.toString()));
         ui->imageSource->setVisible(true);
         ui->noResultsLabel->setText(
             tr("No images found") + "<br />"
-            + tr("Contribute by uploading images to <a href=\"%1\">%1</a>").arg(p->siteUrl().toString()));
+            + tr("Contribute by uploading images to <a href=\"%1\">%1</a>").arg(p->meta().website.toString()));
     }
 }
 
-/// Tells the current provider to search
-/// \param onlyFirstResult If true, the results are limited to one
 void ImageDialog::onSearch(bool onlyFirstResult)
 {
     QString searchTerm = ui->searchTerm->text();
@@ -749,27 +733,32 @@ void ImageDialog::onSearch(bool onlyFirstResult)
     if (m_itemType == ItemType::Movie) {
         initialSearchTerm = m_movie->name();
         id = m_movie->tmdbId().toString();
+
     } else if (m_itemType == ItemType::Concert) {
-        initialSearchTerm = m_concert->name();
+        initialSearchTerm = m_concert->title();
         id = m_concert->tmdbId().toString();
+
     } else if (m_itemType == ItemType::TvShow) {
         initialSearchTerm = m_tvShow->title();
         id = m_tvShow->tvdbId().toString();
+
     } else if (m_itemType == ItemType::TvShowEpisode) {
         initialSearchTerm = m_tvShowEpisode->tvShow()->title();
         id = m_tvShowEpisode->tvShow()->tvdbId().toString();
+
     } else if (m_itemType == ItemType::Album) {
         initialSearchTerm = m_album->title();
-        id = m_album->mbReleaseGroupId();
+        id = m_album->mbReleaseGroupId().toString();
+
     } else if (m_itemType == ItemType::Artist) {
         initialSearchTerm = m_artist->name();
-        id = m_artist->mbId();
+        id = m_artist->mbId().toString();
     }
 
     clearSearch();
     ui->searchTerm->setLoading(true);
     m_currentProvider = ui->imageProvider->itemData(ui->imageProvider->currentIndex(), DataRole::providerPointer)
-                            .value<ImageProviderInterface*>();
+                            .value<mediaelch::scraper::ImageProvider*>();
 
     if (!initialSearchTerm.isEmpty() && searchTerm == initialSearchTerm && !id.isEmpty()) {
         // search term was not changed and we have an id
@@ -788,7 +777,7 @@ void ImageDialog::onSearch(bool onlyFirstResult)
         } else if (m_itemType == ItemType::Concert) {
             m_currentProvider->searchConcert(searchTerm, limit);
         } else if (m_itemType == ItemType::TvShow || m_itemType == ItemType::TvShowEpisode) {
-            m_currentProvider->searchTvShow(searchTerm, limit);
+            m_currentProvider->searchTvShow(searchTerm, ui->comboLanguage->currentLocale(), limit);
         } else if (m_itemType == ItemType::Artist) {
             m_currentProvider->searchArtist(searchTerm, limit);
         } else if (m_itemType == ItemType::Album) {
@@ -797,22 +786,18 @@ void ImageDialog::onSearch(bool onlyFirstResult)
     }
 }
 
-/// Alias for onSearch(false). Used for signal/slot connection
 void ImageDialog::onSearchWithAllResults()
 {
     onSearch(false);
 }
 
-/**
- * \brief Fills the results table
- * \param results List of results
- */
-void ImageDialog::onSearchFinished(QVector<ScraperSearchResult> results, ScraperSearchError error)
+void ImageDialog::onSearchFinished(QVector<ScraperSearchResult> results, mediaelch::ScraperError error)
 {
     ui->searchTerm->setLoading(false);
 
     if (error.hasError()) {
         showError(error.message);
+
     } else if (results.size() > 1) {
         // special case for 1 result  => load images automatically
         //                  0 results => message in center of dialog
@@ -822,12 +807,12 @@ void ImageDialog::onSearchFinished(QVector<ScraperSearchResult> results, Scraper
     for (const ScraperSearchResult& result : results) {
         QString name = result.name;
         if (result.released.isValid()) {
-            name.append(QString(" (%1)").arg(result.released.toString("yyyy")));
+            name.append(QStringLiteral(" (%1)").arg(result.released.toString("yyyy")));
         }
 
-        auto item = new QTableWidgetItem(name);
+        auto* item = new QTableWidgetItem(name);
         item->setData(Qt::UserRole, result.id);
-        int row = ui->results->rowCount();
+        const int row = ui->results->rowCount();
         ui->results->insertRow(row);
         ui->results->setItem(row, 0, item);
     }
@@ -835,16 +820,15 @@ void ImageDialog::onSearchFinished(QVector<ScraperSearchResult> results, Scraper
     // if there is only one result, take it
     if (ui->results->rowCount() == 1) {
         onResultClicked(ui->results->item(0, 0));
+
     } else if (ui->results->rowCount() == 0) {
         ui->stackedWidget->setCurrentIndex(2);
+
     } else {
         ui->stackedWidget->setCurrentIndex(0);
     }
 }
 
-/**
- * \brief Triggers loading of images from the current provider
- */
 void ImageDialog::loadImagesFromProvider(QString id)
 {
     ui->lblSuccessMessage->hide();
@@ -882,75 +866,73 @@ void ImageDialog::loadImagesFromProvider(QString id)
             m_currentProvider->concertCdArts(movieId);
         }
     } else if (m_itemType == ItemType::TvShow) {
-        TvDbId showId = TvDbId(id);
+        TvDbId showId(id);
+        const mediaelch::Locale locale = ui->comboLanguage->currentLocale();
         if (m_type == ImageType::TvShowBackdrop) {
-            m_currentProvider->tvShowBackdrops(showId);
+            m_currentProvider->tvShowBackdrops(showId, locale);
         } else if (m_type == ImageType::TvShowBanner) {
-            m_currentProvider->tvShowBanners(showId);
+            m_currentProvider->tvShowBanners(showId, locale);
         } else if (m_type == ImageType::TvShowCharacterArt) {
-            m_currentProvider->tvShowCharacterArts(showId);
+            m_currentProvider->tvShowCharacterArts(showId, locale);
         } else if (m_type == ImageType::TvShowClearArt) {
-            m_currentProvider->tvShowClearArts(showId);
+            m_currentProvider->tvShowClearArts(showId, locale);
         } else if (m_type == ImageType::TvShowLogos) {
-            m_currentProvider->tvShowLogos(showId);
+            m_currentProvider->tvShowLogos(showId, locale);
         } else if (m_type == ImageType::TvShowThumb) {
-            m_currentProvider->tvShowThumbs(showId);
+            m_currentProvider->tvShowThumbs(showId, locale);
         } else if (m_type == ImageType::TvShowPoster) {
-            m_currentProvider->tvShowPosters(showId);
+            m_currentProvider->tvShowPosters(showId, locale);
         } else if (m_type == ImageType::TvShowSeasonPoster) {
-            m_currentProvider->tvShowSeason(showId, m_season);
+            m_currentProvider->tvShowSeason(showId, m_season, locale);
         } else if (m_type == ImageType::TvShowSeasonBanner) {
-            m_currentProvider->tvShowSeasonBanners(showId, m_season);
+            m_currentProvider->tvShowSeasonBanners(showId, m_season, locale);
         } else if (m_type == ImageType::TvShowSeasonThumb) {
-            m_currentProvider->tvShowSeasonThumbs(showId, m_season);
+            m_currentProvider->tvShowSeasonThumbs(showId, m_season, locale);
         } else if (m_type == ImageType::TvShowSeasonBackdrop) {
-            m_currentProvider->tvShowSeasonBackdrops(showId, m_season);
+            m_currentProvider->tvShowSeasonBackdrops(showId, m_season, locale);
         }
     } else if (m_itemType == ItemType::TvShowEpisode) {
-        TvDbId showId = TvDbId(id);
+        TvDbId showId(id);
         if (m_type == ImageType::TvShowEpisodeThumb) {
-            m_currentProvider->tvShowEpisodeThumb(
-                showId, m_tvShowEpisode->seasonNumber(), m_tvShowEpisode->episodeNumber());
+            m_currentProvider->tvShowEpisodeThumb(showId,
+                m_tvShowEpisode->seasonNumber(),
+                m_tvShowEpisode->episodeNumber(),
+                ui->comboLanguage->currentLocale());
         }
     } else if (m_itemType == ItemType::Artist) {
+        MusicBrainzId mbId(id);
         if (m_type == ImageType::ArtistFanart) {
-            m_currentProvider->artistFanarts(id);
+            m_currentProvider->artistFanarts(mbId);
         } else if (m_type == ImageType::ArtistLogo) {
-            m_currentProvider->artistLogos(id);
+            m_currentProvider->artistLogos(mbId);
         } else if (m_type == ImageType::ArtistThumb) {
-            m_currentProvider->artistThumbs(id);
+            m_currentProvider->artistThumbs(mbId);
         }
     } else if (m_itemType == ItemType::Album) {
+        MusicBrainzId mbId(id);
         if (m_type == ImageType::AlbumCdArt) {
-            m_currentProvider->albumCdArts(id);
+            m_currentProvider->albumCdArts(mbId);
         } else if (m_type == ImageType::AlbumThumb) {
-            m_currentProvider->albumThumbs(id);
+            m_currentProvider->albumThumbs(mbId);
         } else if (m_type == ImageType::AlbumBooklet) {
-            m_currentProvider->albumBooklets(id);
+            m_currentProvider->albumBooklets(mbId);
         }
     }
 }
 
-/**
- * \brief Triggers loading of images
- */
 void ImageDialog::onResultClicked(QTableWidgetItem* item)
 {
     ui->stackedWidget->setCurrentIndex(1);
     loadImagesFromProvider(item->data(Qt::UserRole).toString());
 }
 
-/**
- * \brief Called when the image provider has finished loading
- * \param images List of images
- */
-void ImageDialog::onProviderImagesLoaded(QVector<Poster> images, ScraperLoadError error)
+void ImageDialog::onProviderImagesLoaded(QVector<Poster> images, mediaelch::ScraperError error)
 {
     if (error.hasError()) {
         qDebug() << "Error while querying image provider:" << error.message;
         showError(tr("Error while querying image provider: %1").arg(error.message));
     }
-    setDownloads(images, false);
+    setAndStartDownloads(images);
 }
 
 void ImageDialog::setMultiSelection(const bool& enable)
@@ -975,8 +957,8 @@ QString ImageDialog::formatSearchText(const QString& text)
     QString fText = text;
     fText.replace(" - ", " ");
     fText.replace("-", " ");
-    NameFormatter format;
-    fText = format.formatName(fText);
+    NameFormatter nameFormatter(Settings::instance()->excludeWords());
+    fText = nameFormatter.formatName(fText);
     return fText;
 }
 

@@ -92,7 +92,7 @@ void MusicMultiScrapeDialog::onChkAllToggled(bool toggled)
     onChkToggled();
 }
 
-bool MusicMultiScrapeDialog::isExecuted()
+bool MusicMultiScrapeDialog::isExecuted() const
 {
     return m_executed;
 }
@@ -141,10 +141,11 @@ void MusicMultiScrapeDialog::reject()
     QDialog::reject();
 }
 
-void MusicMultiScrapeDialog::disconnectScrapers()
+void MusicMultiScrapeDialog::disconnectScrapers() const
 {
-    for (MusicScraperInterface* scraper : Manager::instance()->scrapers().musicScrapers()) {
-        disconnect(scraper, &MusicScraperInterface::sigSearchDone, this, &MusicMultiScrapeDialog::onSearchFinished);
+    using namespace mediaelch::scraper;
+    for (MusicScraper* scraper : Manager::instance()->scrapers().musicScrapers()) {
+        disconnect(scraper, &MusicScraper::sigSearchDone, this, &MusicMultiScrapeDialog::onSearchFinished);
     }
 }
 
@@ -159,7 +160,7 @@ void MusicMultiScrapeDialog::onStartScraping()
 
     m_scraperInterface = Manager::instance()->scrapers().musicScrapers().at(0);
     connect(m_scraperInterface,
-        &MusicScraperInterface::sigSearchDone,
+        &mediaelch::scraper::MusicScraper::sigSearchDone,
         this,
         &MusicMultiScrapeDialog::onSearchFinished,
         Qt::UniqueConnection);
@@ -253,7 +254,7 @@ void MusicMultiScrapeDialog::scrapeNext()
             elchOverload<Album*, int, int>(&MusicMultiScrapeDialog::onProgress),
             Qt::UniqueConnection);
 
-        if (!m_currentAlbum->mbAlbumId().isEmpty()) {
+        if (m_currentAlbum->mbAlbumId().isValid()) {
             m_currentAlbum->controller()->loadData(m_currentAlbum->mbAlbumId(),
                 m_currentAlbum->mbReleaseGroupId(),
                 m_scraperInterface,
@@ -280,7 +281,7 @@ void MusicMultiScrapeDialog::scrapeNext()
             elchOverload<Artist*, int, int>(&MusicMultiScrapeDialog::onProgress),
             Qt::UniqueConnection);
 
-        if (!m_currentArtist->mbId().isEmpty()) {
+        if (m_currentArtist->mbId().isValid()) {
             m_currentArtist->controller()->loadData(m_currentArtist->mbId(), m_scraperInterface, m_artistInfosToLoad);
 
         } else {
@@ -300,10 +301,13 @@ void MusicMultiScrapeDialog::onSearchFinished(QVector<ScraperSearchResult> resul
     }
 
     if (m_currentArtist != nullptr) {
-        m_currentArtist->controller()->loadData(results.first().id, m_scraperInterface, m_artistInfosToLoad);
+        m_currentArtist->controller()->loadData(
+            MusicBrainzId(results.first().id), m_scraperInterface, m_artistInfosToLoad);
     } else if (m_currentAlbum != nullptr) {
-        m_currentAlbum->controller()->loadData(
-            results.first().id, results.first().id2, m_scraperInterface, m_albumInfosToLoad);
+        m_currentAlbum->controller()->loadData(MusicBrainzId(results.first().id),
+            MusicBrainzId(results.first().id2),
+            m_scraperInterface,
+            m_albumInfosToLoad);
     }
 }
 

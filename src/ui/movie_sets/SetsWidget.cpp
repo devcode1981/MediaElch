@@ -54,7 +54,7 @@ SetsWidget::SetsWidget(QWidget* parent) : QWidget(parent), ui(new Ui::SetsWidget
     connect(ui->backdrop,              &MyLabel::clicked,                     this, &SetsWidget::chooseSetBackdrop);
     connect(ui->buttonPreviewPoster,   &QAbstractButton::clicked,             this, &SetsWidget::onPreviewPoster);
     connect(ui->buttonPreviewBackdrop, &QAbstractButton::clicked,             this, &SetsWidget::onPreviewBackdrop);
-    connect(m_downloadManager,         &DownloadManager::sigDownloadFinished, this, &SetsWidget::onDownloadFinished);
+    connect(m_downloadManager,         &DownloadManager::sigDownloadFinished, this, &SetsWidget::onDownloadFinished, static_cast<Qt::ConnectionType>(Qt::QueuedConnection | Qt::UniqueConnection));
     // clang-format on
 
     ui->sets->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -222,8 +222,7 @@ void SetsWidget::loadSet(QString set)
         ui->posterResolution->setText(QString("%1x%2").arg(poster.width()).arg(poster.height()));
         ui->buttonPreviewPoster->setEnabled(true);
         m_currentPoster = poster;
-    } else if (Manager::instance()->mediaCenterInterface()->hasFeature(MediaCenterFeature::HandleMovieSetImages)
-               && !Manager::instance()->mediaCenterInterface()->movieSetPoster(set).isNull()) {
+    } else if (!Manager::instance()->mediaCenterInterface()->movieSetPoster(set).isNull()) {
         QImage poster = Manager::instance()->mediaCenterInterface()->movieSetPoster(set);
         QPixmap pixmap = QPixmap::fromImage(poster).scaled(
             QSize(200, 300) * helper::devicePixelRatio(this), Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -251,8 +250,7 @@ void SetsWidget::loadSet(QString set)
         ui->backdropResolution->setText(QString("%1x%2").arg(backdrop.width()).arg(backdrop.height()));
         ui->buttonPreviewBackdrop->setEnabled(true);
         m_currentBackdrop = backdrop;
-    } else if (Manager::instance()->mediaCenterInterface()->hasFeature(MediaCenterFeature::HandleMovieSetImages)
-               && !Manager::instance()->mediaCenterInterface()->movieSetBackdrop(set).isNull()) {
+    } else if (!Manager::instance()->mediaCenterInterface()->movieSetBackdrop(set).isNull()) {
         QImage backdrop = Manager::instance()->mediaCenterInterface()->movieSetBackdrop(set);
         QPixmap pixmap = QPixmap::fromImage(backdrop).scaled(
             QSize(200, 112) * helper::devicePixelRatio(this), Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -284,7 +282,7 @@ void SetsWidget::onSortTitleChanged(QTableWidgetItem* item)
         qDebug() << "Invalid row";
         return;
     }
-    auto movie = ui->movies->item(item->row(), 0)->data(Qt::UserRole).value<Movie*>();
+    auto* movie = ui->movies->item(item->row(), 0)->data(Qt::UserRole).value<Movie*>();
     movie->setSortTitle(item->text());
     ui->movies->sortByColumn(1, Qt::AscendingOrder);
     if (!m_moviesToSave[movie->set().name].contains(movie)) {
@@ -304,8 +302,8 @@ void SetsWidget::onAddMovie()
     }
 
     auto* listDialog = new MovieListDialog(this);
-    QVector<Movie*> movies = listDialog->selectedMovies();
     const int exitCode = listDialog->exec();
+    QVector<Movie*> movies = listDialog->selectedMovies();
     listDialog->deleteLater();
 
     if (exitCode != QDialog::Accepted || movies.isEmpty()) {
@@ -347,7 +345,7 @@ void SetsWidget::onRemoveMovie()
         qDebug() << "Invalid current row in movies";
         return;
     }
-    auto movie = ui->movies->item(ui->movies->currentRow(), 0)->data(Qt::UserRole).value<Movie*>();
+    auto* movie = ui->movies->item(ui->movies->currentRow(), 0)->data(Qt::UserRole).value<Movie*>();
     m_sets[movie->set().name].removeOne(movie);
     if (!m_moviesToSave[movie->set().name].contains(movie)) {
         m_moviesToSave[movie->set().name].append(movie);
@@ -367,19 +365,14 @@ void SetsWidget::chooseSetPoster()
         return;
     }
 
-    if (!Manager::instance()->mediaCenterInterface()->hasFeature(MediaCenterFeature::HandleMovieSetImages)) {
-        return;
-    }
-
     QString setName = ui->sets->item(ui->sets->currentRow(), 0)->data(Qt::UserRole).toString();
     auto* movie = new Movie(QStringList());
     movie->setName(setName);
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(ImageType::MovieSetPoster);
-    imageDialog->clear();
     imageDialog->setMovie(movie);
-    imageDialog->exec(ImageType::MoviePoster);
+    imageDialog->execWithType(ImageType::MoviePoster);
     const int exitCode = imageDialog->result();
     const QUrl imageUrl = imageDialog->imageUrl();
     imageDialog->deleteLater();
@@ -406,19 +399,14 @@ void SetsWidget::chooseSetBackdrop()
         return;
     }
 
-    if (!Manager::instance()->mediaCenterInterface()->hasFeature(MediaCenterFeature::HandleMovieSetImages)) {
-        return;
-    }
-
     QString setName = ui->sets->item(ui->sets->currentRow(), 0)->data(Qt::UserRole).toString();
     auto* movie = new Movie(QStringList());
     movie->setName(setName);
 
     auto* imageDialog = new ImageDialog(this);
     imageDialog->setImageType(ImageType::MovieSetBackdrop);
-    imageDialog->clear();
     imageDialog->setMovie(movie);
-    imageDialog->exec(ImageType::MovieBackdrop);
+    imageDialog->execWithType(ImageType::MovieBackdrop);
     const int exitCode = imageDialog->result();
     const QUrl imageUrl = imageDialog->imageUrl();
     imageDialog->deleteLater();
@@ -456,13 +444,11 @@ void SetsWidget::saveSet()
         }
         m_moviesToSave[setName].clear();
 
-        if (!m_setPosters[setName].isNull()
-            && Manager::instance()->mediaCenterInterface()->hasFeature(MediaCenterFeature::HandleMovieSetImages)) {
+        if (!m_setPosters[setName].isNull()) {
             Manager::instance()->mediaCenterInterface()->saveMovieSetPoster(setName, m_setPosters[setName]);
             m_setPosters[setName] = QImage();
         }
-        if (!m_setBackdrops[setName].isNull()
-            && Manager::instance()->mediaCenterInterface()->hasFeature(MediaCenterFeature::HandleMovieSetImages)) {
+        if (!m_setBackdrops[setName].isNull()) {
             Manager::instance()->mediaCenterInterface()->saveMovieSetBackdrop(setName, m_setBackdrops[setName]);
             m_setBackdrops[setName] = QImage();
         }
@@ -499,7 +485,7 @@ void SetsWidget::onAddMovieSet()
     m_tableContextMenu->close();
     QString setName = tr("New Movie Set");
     int adder = -1;
-    bool setExists;
+    bool setExists = false;
     do {
         adder++;
         setExists = false;
@@ -636,6 +622,6 @@ void SetsWidget::onJumpToMovie(QTableWidgetItem* item)
         return;
     }
 
-    auto movie = item->data(Qt::UserRole).value<Movie*>();
+    auto* movie = item->data(Qt::UserRole).value<Movie*>();
     emit sigJumpToMovie(movie);
 }

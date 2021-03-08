@@ -36,6 +36,11 @@
     -->
     <gui>
         <forceCache>false</forceCache>
+        <!--
+            If set, MediaElch will load this stylesheet instead of the bundled `default.css`.
+            Only use this tag if you want to develop a custom MediaElch theme for the main window.
+        -->
+        <!--<stylesheet>./path/relative/to/Mediaelch.css</stylesheet>-->
     </gui>
 
     <!--
@@ -147,20 +152,20 @@
         <movies>
             *.mkv,*.mk3d,*.avi,*.mpg,*.mpeg,*.mp4,*.m2ts,*.disc,
             *.m4v,*.strm,*.dat,*.flv,*.vob,*.ts,*.iso,*.ogg,*.ogm,
-            *.rmvb,*.img,*.wmv,*.mov,*.divx,VIDEO_TS.IFO,
-            index.bdmv,*.wtv"
+            *.rmvb,*.img,*.wmv,*.mov,*.divx,VIDEO_TS.IFO,*.webm,
+            index.bdmv,*.wtv
         </movies>
         <tvShows>
             *.mkv,*.mk3d,*.avi,*.mpg,*.mpeg,*.mp4,*.m2ts,*.disc,
             *.m4v,*.strm,*.dat,*.flv,*.vob,*.ts,*.iso,*.ogg,*.ogm,
-            *.rmvb,*.img,*.wmv,*.mov,*.divx,VIDEO_TS.IFO,
-            index.bdmv,*.wtv"
+            *.rmvb,*.img,*.wmv,*.mov,*.divx,VIDEO_TS.IFO,*.webm,
+            index.bdmv,*.wtv
         </tvShows>
         <concerts>
             *.mkv,*.mk3d,*.avi,*.mpg,*.mpeg,*.mp4,*.m2ts,*.disc,
             *.m4v,*.strm,*.dat,*.flv,*.vob,*.ts,*.iso,*.ogg,*.ogm,
-            *.rmvb,*.img,*.wmv,*.mov,*.divx,VIDEO_TS.IFO,
-            index.bdmv,*.wtv"
+            *.rmvb,*.img,*.wmv,*.mov,*.divx,VIDEO_TS.IFO,*.webm,
+            index.bdmv,*.wtv
         </concerts>
         <subtitle>
             *.idx,*.sub,*.srr,*.srt,*.ass,*.ttml

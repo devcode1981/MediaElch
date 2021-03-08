@@ -4,7 +4,7 @@
 #include "globals/Poster.h"
 #include "globals/ScraperResult.h"
 #include "network/NetworkManager.h"
-#include "scrapers/image/ImageProviderInterface.h"
+#include "scrapers/image/ImageProvider.h"
 #include "tv_shows/EpisodeNumber.h"
 #include "tv_shows/SeasonNumber.h"
 
@@ -37,8 +37,11 @@ public:
     explicit ImageDialog(QWidget* parent = nullptr);
     ~ImageDialog() override;
 
-    void setDownloads(QVector<Poster> downloads, bool initial = true);
+public:
+    void setDefaultDownloads(QVector<Poster> downloads);
+    /// \brief Return the URL of the last clicked image
     QUrl imageUrl();
+    /// \brief Return the URLs of the selected images
     QVector<QUrl> imageUrls();
     void setImageType(ImageType type);
     void setItemType(ItemType type);
@@ -50,19 +53,20 @@ public:
     void setTvShowEpisode(TvShowEpisode* episode);
     void setArtist(Artist* artist);
     void setAlbum(Album* album);
-    void clear();
+    /// \brief Cancels the current download and clears the download queue
     void cancelDownloads();
 
 public slots:
     void accept() override;
     void reject() override;
-    int exec() override;
-    int exec(ImageType type);
+    int execWithType(ImageType type);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private slots:
+    /// \brief Called when a download has finished
+    /// \details Renders the table and displays the downloaded image and starts the next download
     void downloadFinished();
     void startNextDownload();
     void imageClicked(int row, int col);
@@ -71,12 +75,16 @@ private slots:
     void onPreviewSizeChange(int value);
     void onZoomIn();
     void onZoomOut();
+    /// \brief Tells the current provider to search
+    /// \param onlyFirstResult If true, the results are limited to one.
     void onSearch(bool onlyFirstResult = false);
+    /// \brief Alias for onSearch(false). Used for signal/slot connection
     void onSearchWithAllResults();
     void onProviderChanged(int index);
-    void onSearchFinished(QVector<ScraperSearchResult> results, ScraperSearchError error);
+    void onLanguageChanged(int index);
+    void onSearchFinished(QVector<ScraperSearchResult> results, mediaelch::ScraperError error);
     void onResultClicked(QTableWidgetItem* item);
-    void onProviderImagesLoaded(QVector<Poster> images, ScraperLoadError error);
+    void onProviderImagesLoaded(QVector<Poster> images, mediaelch::ScraperError error);
     void onImageClosed(const QString& url);
     void updateSourceLink();
 
@@ -109,25 +117,32 @@ private:
     QUrl m_imageUrl;
     QVector<QUrl> m_imageUrls;
     ImageType m_type = ImageType::None;
-    QVector<ImageProviderInterface*> m_providers;
+    QVector<mediaelch::scraper::ImageProvider*> m_providers;
     Concert* m_concert = nullptr;
     Movie* m_movie = nullptr;
     TvShow* m_tvShow = nullptr;
     TvShowEpisode* m_tvShowEpisode = nullptr;
     ItemType m_itemType = ItemType::Movie;
     QVector<Poster> m_defaultElements;
-    ImageProviderInterface* m_currentProvider = nullptr;
+    mediaelch::scraper::ImageProvider* m_currentProvider = nullptr;
     SeasonNumber m_season;
     EpisodeNumber m_episode;
     bool m_multiSelection = false;
     Artist* m_artist = nullptr;
     Album* m_album = nullptr;
 
+private:
+    void setAndStartDownloads(QVector<Poster> downloads);
+
     mediaelch::network::NetworkManager* network();
+    void setupProviderCombo();
+    void resizeAndReposition();
     void renderTable();
     int calcColumnCount();
     int getColumnWidth();
+    /// \brief Triggers loading of images from the current provider
     void loadImagesFromProvider(QString id);
+    /// \brief Clears the dialogs contents and cancels outstanding downloads
     void clearSearch();
     QString formatSearchText(const QString& text);
 

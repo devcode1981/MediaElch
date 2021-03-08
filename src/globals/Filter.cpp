@@ -73,15 +73,15 @@ Filter::Filter(QString text, QString shortText, QStringList filterText, bool has
 }
 
 /**
- * \brief Checks if a filter responds to the given text
+ * \brief Checks if a filter responds to the given text, e.g. whether we should display the filter type in drop-downs.
  * \param text Text to check
  * \return True if the filter responds to the given text
  */
 bool Filter::accepts(QString text) const
 {
-    if (isInfo(MovieFilters::Title) || (isInfo(MovieFilters::ImdbId) && m_hasInfo)
-        || (isInfo(MovieFilters::TmdbId) && m_hasInfo) || isInfo(MovieFilters::Path) || isInfo(TvShowFilters::Title)
-        || isInfo(ConcertFilters::Title)) {
+    if (isInfo(MovieFilters::Title) || isInfo(MovieFilters::OriginalTitle)
+        || (isInfo(MovieFilters::ImdbId) && m_hasInfo) || (isInfo(MovieFilters::TmdbId) && m_hasInfo)
+        || isInfo(MovieFilters::Path) || isInfo(TvShowFilters::Title) || isInfo(ConcertFilters::Title)) {
         return true;
     }
     for (const auto& filterText : m_filterText) {
@@ -216,6 +216,9 @@ bool Filter::accepts(Movie* movie)
     if (isInfo(MovieFilters::Title)) {
         return movie->name().contains(m_shortText, Qt::CaseInsensitive);
     }
+    if (isInfo(MovieFilters::OriginalTitle)) {
+        return movie->originalName().contains(m_shortText, Qt::CaseInsensitive);
+    }
     if (isInfo(MovieFilters::StreamDetails)) {
         return (m_hasInfo && movie->streamDetailsLoaded()) || (!m_hasInfo && !movie->streamDetailsLoaded());
     }
@@ -348,7 +351,7 @@ bool Filter::accepts(TvShowEpisode* episode)
 bool Filter::accepts(Concert* concert)
 {
     if (isInfo(ConcertFilters::Title)) {
-        return concert->name().contains(m_shortText, Qt::CaseInsensitive);
+        return concert->title().contains(m_shortText, Qt::CaseInsensitive);
     }
     return true;
 }

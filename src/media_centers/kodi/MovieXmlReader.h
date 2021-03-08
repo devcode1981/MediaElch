@@ -1,5 +1,7 @@
 #pragma once
 
+#include "globals/Globals.h"
+
 #include <QDate>
 #include <QDomDocument>
 #include <QString>
@@ -29,8 +31,8 @@ private:
     template<MovieStoreMethod<QString> method, const char splitChar>
     void stringList(const QDomElement& element)
     {
-        QStringList values = element.text().split(splitChar, QString::SkipEmptyParts);
-        for (const QString& value : values) {
+        QStringList values = element.text().split(splitChar, ElchSplitBehavior::SkipEmptyParts);
+        for (const QString& value : asConst(values)) {
             (m_movie.*method)(value.trimmed());
         }
     }

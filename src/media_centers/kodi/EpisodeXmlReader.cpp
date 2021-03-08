@@ -49,6 +49,8 @@ void EpisodeXmlReader::parseNfoDom(QDomElement episodeDetails)
             m_episode.setTvdbId(TvDbId(value));
         } else if (type == "tmdb") {
             m_episode.setTmdbId(TmdbId(value));
+        } else if (type == "tvmaze") {
+            m_episode.setTvMazeId(TvMazeId(value));
         } else {
             qWarning() << "[EpisodeXmlReader] Unsupported unique id type:" << type;
         }
@@ -174,6 +176,13 @@ void EpisodeXmlReader::parseNfoDom(QDomElement episodeDetails)
     if (!episodeDetails.elementsByTagName("studio").isEmpty()) {
         m_episode.setNetwork(episodeDetails.elementsByTagName("studio").at(0).toElement().text());
     }
+
+    // tags are officially not yet supported, even by Kodi 19 but scraper providers start
+    // to support them
+    for (int i = 0, n = episodeDetails.elementsByTagName("tag").size(); i < n; i++) {
+        m_episode.addTag(episodeDetails.elementsByTagName("tag").at(i).toElement().text());
+    }
+
     if (!episodeDetails.elementsByTagName("thumb").isEmpty()) {
         m_episode.setThumbnail(QUrl(episodeDetails.elementsByTagName("thumb").at(0).toElement().text()));
     }
@@ -207,7 +216,8 @@ QString EpisodeXmlReader::makeValidEpisodeXml(const QString& nfoContent)
 {
     QString def;
     QStringList baseNfoContent;
-    for (const QString& line : nfoContent.split("\n")) {
+    const auto& lines = nfoContent.split("\n");
+    for (const QString& line : lines) {
         if (!line.startsWith("<?xml")) {
             baseNfoContent << line;
         } else {

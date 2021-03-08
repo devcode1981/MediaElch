@@ -41,13 +41,13 @@ private:
     QVector<Movie*> m_movies;
     QQueue<Movie*> m_queue;
     QPointer<Movie> m_currentMovie;
-    MovieScraperInterface* m_scraperInterface = nullptr;
-    QHash<MovieScraperInterface*, QString> m_currentIds;
+    mediaelch::scraper::MovieScraper* m_scraperInterface = nullptr;
+    QHash<mediaelch::scraper::MovieScraper*, QString> m_currentIds;
     bool m_isImdb = false;
     bool m_isTmdb = false;
     bool m_executed = false;
     QSet<MovieScraperInfo> m_infosToLoad;
     void loadMovieData(Movie* movie, ImdbId id);
     void loadMovieData(Movie* movie, TmdbId id);
-    bool isExecuted();
+    bool isExecuted() const;
 };

@@ -17,6 +17,7 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QRegExp>
+#include <QRegularExpression>
 #include <QSpinBox>
 #include <QWidget>
 
@@ -87,16 +88,17 @@ QString formatTrailerUrl(QString url)
     }
 
     QString videoId;
-    QRegExp rx("youtube.com/watch\\?v=([^&]*)");
-    if (rx.indexIn(url, 0) != -1) {
-        videoId = rx.cap(1);
+    QRegularExpression rx("youtube.com/watch\\?v=([^&]*)");
+    QRegularExpressionMatch match = rx.match(url);
+    if (match.hasMatch()) {
+        videoId = match.captured(1);
     }
 
     if (videoId.isEmpty()) {
         return url;
     }
 
-    return QString("plugin://plugin.video.youtube/?action=play_video&videoid=%1").arg(videoId);
+    return QStringLiteral("plugin://plugin.video.youtube/?action=play_video&videoid=%1").arg(videoId);
 }
 
 bool isDvd(const mediaelch::DirectoryPath& path, bool noSubFolder)
@@ -122,9 +124,7 @@ bool isDvd(QString path, bool noSubFolder)
         return fi.absolutePath().endsWith("VIDEO_TS");
     }
     QDir dir(path);
-    QStringList filters;
-    filters << "VIDEO_TS"
-            << "VIDEO TS";
+    const QStringList filters{"VIDEO_TS", "VIDEO TS"};
     if (dir.entryList(filters, QDir::Dirs | QDir::NoDotAndDotDot).count() > 0) {
         for (const QString& filter : filters) {
             dir.setPath(path + QDir::separator() + filter);
@@ -192,7 +192,7 @@ QImage& resizeBackdrop(QImage& image, bool& resized)
 
 QByteArray& resizeBackdrop(QByteArray& image)
 {
-    bool resized;
+    bool resized = false;
     QImage img = QImage::fromData(image);
     resizeBackdrop(img, resized);
     if (!resized) {
@@ -203,48 +203,34 @@ QByteArray& resizeBackdrop(QByteArray& image)
     return image;
 }
 
-QString& sanitizeFileName(QString& fileName)
+void sanitizeFileName(QString& fileName)
 {
+    // Just a few changes to avoid invalid filenames.
+    // See https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+    fileName.replace("<", " ");
+    fileName.replace(">", " ");
+    fileName.replace(":", " ");
+    fileName.replace("\"", " ");
     fileName.replace("/", " ");
     fileName.replace("\\", " ");
-    fileName.replace("$", "");
-    fileName.replace("<", "");
-    fileName.replace(">", "");
-    fileName.replace(":", "");
-    fileName.replace("\"", "");
+    fileName.replace("|", " ");
     fileName.replace("?", "");
     fileName.replace("*", "");
+
+    // Not part of the list above but may cause issues for Shell-Scripts.
+    fileName.replace("$", "");
+
+    // If the filename starts with a dot then it is hidden on *nix systems.
+    fileName.remove(QRegularExpression("^[.]+"));
+    // Replace consecutive spaces
+    fileName.replace(QRegularExpression(R"(\s\s+)"), " ");
+
     fileName = fileName.trimmed();
-    return fileName;
 }
 
-QString stackedBaseName(const QString& fileName)
+void sanitizeFolderName(QString& fileName)
 {
-    QString baseName = fileName;
-    QRegExp rx1a(R"((.*)([ _\.-]*(?:cd|dvd|p(?:ar)?t|dis[ck])[ _\.-]*[0-9]+)(.*)(\.[^.]+)$)", Qt::CaseInsensitive);
-    QRegExp rx1b("(.*)([ _\\.-]+)$");
-    QRegExp rx2a("(.*)([ _\\.-]*(?:cd|dvd|p(?:ar)?t|dis[ck])[ _.-]*[a-d])(.*)(\\.[^.]+)$", Qt::CaseInsensitive);
-    QRegExp rx2b("(.*)([ _\\.-]+)$");
-
-    QVector<QVector<QRegExp>> regex;
-    regex << (QVector<QRegExp>() << rx1a << rx1b);
-    regex << (QVector<QRegExp>() << rx2a << rx2b);
-
-    for (const QVector<QRegExp>& rx : regex) {
-        if (rx.at(0).indexIn(fileName) != -1) {
-            QString title = rx.at(0).cap(1);
-            QString volume = rx.at(0).cap(2);
-            /*QString ignore = rx.at(0).cap(3);
-            QString extension = rx.at(0).cap(4);*/
-            while (rx.at(1).indexIn(title) != -1) {
-                title = rx.at(1).capturedTexts().at(1);
-                volume.prepend(rx.at(1).capturedTexts().at(2));
-            }
-            return title;
-        }
-    }
-
-    return baseName;
+    return sanitizeFileName(fileName);
 }
 
 QString appendArticle(const QString& text)
@@ -254,7 +240,8 @@ QString appendArticle(const QString& text)
     }
 
     QString name = text;
-    for (const QString& article : Settings::instance()->advanced()->sortTokens()) {
+    const auto& tokens = Settings::instance()->advanced()->sortTokens();
+    for (const QString& article : tokens) {
         if (text.startsWith(article + " ", Qt::CaseInsensitive) && text.length() > article.length()) {
             name = text.mid(article.length() + 1) + ", " + text.mid(0, article.length());
             break;
@@ -533,7 +520,7 @@ void applyEffect(QWidget* parent)
 {
     for (QPushButton* button : parent->findChildren<QPushButton*>()) {
         if (button->property("dropShadow").toBool() && devicePixelRatio(button) == 1) {
-            auto effect = new QGraphicsDropShadowEffect(parent);
+            auto* effect = new QGraphicsDropShadowEffect(parent);
             effect->setColor(QColor(0, 0, 0, 30));
             effect->setOffset(2);
             effect->setBlurRadius(4);
@@ -656,55 +643,13 @@ qreal devicePixelRatio(const QPixmap& pixmap)
 
 void setButtonStyle(QPushButton* button, ButtonStyle style)
 {
-    QString styleSheet;
-
-    styleSheet.append("QPushButton {");
-    styleSheet.append("padding: 4px;");
-    styleSheet.append("margin: 4px;");
-    styleSheet.append("border-radius: 4px;");
-#if defined(Q_OS_MAC)
-    styleSheet.append("font-size: 11px;");
-#endif
-    styleSheet.append("}");
-
-    if (style == ButtonDanger) {
-        styleSheet.append("QPushButton { color: #ffffff; background-color: qlineargradient(spread:pad, x1:0, y1:0, "
-                          "x2:0, y2:1, stop:0 rgba(238, 95, 91, 255), stop:1 rgba(189, 53, 47, 255)); border: 1px "
-                          "solid #C12E2A;}");
-        styleSheet.append("QPushButton::pressed { background-color: rgb(189, 53, 47); }");
-        styleSheet.append("QPushButton::disabled { background-color: rgb(213, 125, 120); }");
-        styleSheet.append("margin-bottom: 2px;");
-    } else if (style == ButtonPrimary) {
-        styleSheet.append("QPushButton { color: #ffffff; background-color: qlineargradient(spread:pad, x1:0, y1:0, "
-                          "x2:0, y2:1, stop:0 rgba(66, 139, 202, 255), stop:1 rgba(48, 113, 169, 255)); border: 1px "
-                          "solid #2D6CA2; }");
-        styleSheet.append("QPushButton::pressed { background-color: rgb(48, 113, 169); }");
-        styleSheet.append("QPushButton::disabled { background-color: rgb(66, 139, 202); }");
-        styleSheet.append("margin-bottom: 2px;");
-    } else if (style == ButtonInfo) {
-        styleSheet.append("QPushButton { color: #ffffff; background-color: qlineargradient(spread:pad, x1:0, y1:0, "
-                          "x2:0, y2:1, stop:0 #5BC0DE, stop:1 #31B0D5); border: 1px solid #2AABD2; }");
-        styleSheet.append("QPushButton::pressed { background-color: #31B0D5; }");
-        styleSheet.append("QPushButton::disabled { background-color: #79cce4; }");
-        styleSheet.append("margin-bottom: 2px;");
-    } else if (style == ButtonWarning) {
-        styleSheet.append("QPushButton { color: #ffffff; background-color: qlineargradient(spread:pad, x1:0, y1:0, "
-                          "x2:0, y2:1, stop:0 rgba(251, 180, 80, 255), stop:1 rgba(248, 148, 6, 255)); border: 1px "
-                          "solid #EB9316; }");
-        styleSheet.append("QPushButton::pressed { background-color: rgb(248, 148, 6); }");
-        styleSheet.append("QPushButton::disabled { background-color: rgb(247, 177, 79); }");
-        styleSheet.append("margin-bottom: 2px;");
-    } else if (style == ButtonSuccess) {
-        styleSheet.append("QPushButton { color: #ffffff; background-color: qlineargradient(spread:pad, x1:0, y1:0, "
-                          "x2:0, y2:1, stop:0 rgba(98, 196, 98, 255), stop:1 rgba(81, 163, 81, 255)); border: 1px "
-                          "solid #419641; }");
-        styleSheet.append("QPushButton::pressed { background-color: rgb(81, 163, 81); }");
-        styleSheet.append("QPushButton::disabled { background-color: rgb(142, 196, 142); }");
-        styleSheet.append("margin-bottom: 2px;");
-    } else {
-        styleSheet = "";
+    switch (style) {
+    case ButtonStyle::ButtonDanger: button->setProperty("buttonstyle", "danger"); break;
+    case ButtonStyle::ButtonPrimary: button->setProperty("buttonstyle", "primary"); break;
+    case ButtonStyle::ButtonInfo: button->setProperty("buttonstyle", "info"); break;
+    case ButtonStyle::ButtonWarning: button->setProperty("buttonstyle", "warning"); break;
+    case ButtonStyle::ButtonSuccess: button->setProperty("buttonstyle", "success"); break;
     }
-    button->setStyleSheet(styleSheet);
 }
 
 void fillStereoModeCombo(QComboBox* box)
@@ -783,9 +728,8 @@ QImage getImage(mediaelch::FilePath path)
 
 bool containsIgnoreCase(const QStringList& list, const QString& compare)
 {
-    QString compareLower = compare.toLower();
     for (const auto& item : list) {
-        if (item.toLower().contains(compareLower)) {
+        if (item.contains(compare, Qt::CaseInsensitive)) {
             return true;
         }
     }

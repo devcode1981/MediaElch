@@ -10,54 +10,60 @@
 #include "data/Storage.h"
 #include "network/NetworkRequest.h"
 #include "scrapers/image/FanartTv.h"
-#include "scrapers/movie/TMDb.h"
+#include "scrapers/movie/tmdb/TmdbMovie.h"
 
-FanartTvMusicArtists::FanartTvMusicArtists(QObject* parent)
+namespace mediaelch {
+namespace scraper {
+
+QString FanartTvMusicArtists::ID = "images.fanarttv-music";
+
+FanartTvMusicArtists::FanartTvMusicArtists(QObject* parent) : ImageProvider(parent)
 {
-    setParent(parent);
-    m_provides << ImageType::ConcertBackdrop << ImageType::ConcertLogo;
+    m_meta.identifier = ID;
+    m_meta.name = "Fanart.tv Music Artists";
+    m_meta.description = tr("FanartTV is a community-driven image provider.");
+    m_meta.website = "https://fanart.tv";
+    m_meta.termsOfService = "https://fanart.tv/terms-and-conditions/";
+    m_meta.privacyPolicy = "https://fanart.tv/privacy-policy/";
+    m_meta.help = "https://forum.fanart.tv/";
+    m_meta.supportedImageTypes = {ImageType::ConcertBackdrop, ImageType::ConcertLogo};
+    // Multiple languages, but no way to query for it and also no offical list of languages.
+    m_meta.supportedLanguages = {
+        "bg",
+        "zh",
+        "hr",
+        "cs",
+        "da",
+        "nl",
+        "en",
+        "fi",
+        "fr",
+        "de",
+        "el",
+        "he",
+        "hu",
+        "it",
+        "ja",
+        "ko",
+        "no",
+        "pl",
+        "pt",
+        "ru",
+        "sl",
+        "es",
+        "sv",
+        "tr",
+    };
+    m_meta.defaultLocale = "en";
+
     m_apiKey = "842f7a5d1cc7396f142b8dd47c4ba42b";
     m_searchResultLimit = 0;
-    m_language = "en";
     m_preferredDiscType = "BluRay";
 }
 
-/**
- * \brief Returns the name of this image provider
- * \return Name of this image provider
- */
-QString FanartTvMusicArtists::name() const
+const ImageProvider::ScraperMeta& FanartTvMusicArtists::meta() const
 {
-    return QString("Fanart.tv Music Artists");
-}
-
-QUrl FanartTvMusicArtists::siteUrl() const
-{
-    return QUrl("https://fanart.tv");
-}
-
-QString FanartTvMusicArtists::identifier() const
-{
-    return QString("images.fanarttv-music");
-}
-
-mediaelch::Locale FanartTvMusicArtists::defaultLanguage()
-{
-    return mediaelch::Locale::English;
-}
-
-const QVector<mediaelch::Locale>& FanartTvMusicArtists::supportedLanguages()
-{
-    return m_supportedLanguages;
-}
-
-/**
- * \brief Returns a list of supported image types
- * \return List of supported image types
- */
-QVector<ImageType> FanartTvMusicArtists::provides()
-{
-    return m_provides;
+    return m_meta;
 }
 
 mediaelch::network::NetworkManager* FanartTvMusicArtists::network()
@@ -87,7 +93,7 @@ void FanartTvMusicArtists::onSearchArtistFinished()
     reply->deleteLater();
 
     if (reply->error() != QNetworkReply::NoError) {
-        emit sigSearchDone({}, {ScraperSearchError::ErrorType::NetworkError, reply->errorString()});
+        emit sigSearchDone({}, mediaelch::replyToScraperError(*reply));
         return;
     }
 
@@ -142,7 +148,7 @@ void FanartTvMusicArtists::onLoadConcertFinished()
     reply->deleteLater();
 
     if (reply->error() != QNetworkReply::NoError) {
-        emit sigImagesLoaded({}, {ScraperLoadError::ErrorType::NetworkError, reply->errorString()});
+        emit sigImagesLoaded({}, mediaelch::replyToScraperError(*reply));
         return;
     }
 
@@ -202,90 +208,110 @@ QVector<Poster> FanartTvMusicArtists::parseData(QString json, ImageType type)
             }();
 
             b.language = poster.value("lang").toString();
-            FanartTv::insertPoster(posters, b, m_language, m_preferredDiscType);
+            FanartTv::insertPoster(posters, b, m_meta.defaultLocale.toString(), m_preferredDiscType);
         }
     }
 
     return posters;
 }
 
-void FanartTvMusicArtists::searchTvShow(QString searchStr, int limit)
+void FanartTvMusicArtists::searchTvShow(QString searchStr, mediaelch::Locale locale, int limit)
 {
     Q_UNUSED(searchStr);
     Q_UNUSED(limit);
+    Q_UNUSED(locale);
 }
 
-void FanartTvMusicArtists::tvShowImages(TvShow* show, TvDbId tvdbId, QVector<ImageType> types)
+void FanartTvMusicArtists::tvShowImages(TvShow* show,
+    TvDbId tvdbId,
+    QVector<ImageType> types,
+    const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(show);
     Q_UNUSED(types);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusicArtists::tvShowPosters(TvDbId tvdbId)
+void FanartTvMusicArtists::tvShowPosters(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
+    Q_UNUSED(tvdbId)
+    Q_UNUSED(locale)
+}
+
+void FanartTvMusicArtists::tvShowBackdrops(TvDbId tvdbId, const mediaelch::Locale& locale)
+{
+    Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
+}
+
+void FanartTvMusicArtists::tvShowLogos(TvDbId tvdbId, const mediaelch::Locale& locale)
+{
+    Q_UNUSED(locale)
     Q_UNUSED(tvdbId);
 }
 
-void FanartTvMusicArtists::tvShowBackdrops(TvDbId tvdbId)
+void FanartTvMusicArtists::tvShowThumbs(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusicArtists::tvShowLogos(TvDbId tvdbId)
+void FanartTvMusicArtists::tvShowClearArts(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusicArtists::tvShowThumbs(TvDbId tvdbId)
+void FanartTvMusicArtists::tvShowCharacterArts(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusicArtists::tvShowClearArts(TvDbId tvdbId)
+void FanartTvMusicArtists::tvShowBanners(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusicArtists::tvShowCharacterArts(TvDbId tvdbId)
+void FanartTvMusicArtists::tvShowEpisodeThumb(TvDbId tvdbId,
+    SeasonNumber season,
+    EpisodeNumber episode,
+    const mediaelch::Locale& locale)
 {
-    Q_UNUSED(tvdbId);
+    Q_UNUSED(tvdbId)
+    Q_UNUSED(season)
+    Q_UNUSED(episode)
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusicArtists::tvShowBanners(TvDbId tvdbId)
-{
-    Q_UNUSED(tvdbId);
-}
-
-void FanartTvMusicArtists::tvShowEpisodeThumb(TvDbId tvdbId, SeasonNumber season, EpisodeNumber episode)
-{
-    Q_UNUSED(tvdbId);
-    Q_UNUSED(season);
-    Q_UNUSED(episode);
-}
-
-void FanartTvMusicArtists::tvShowSeason(TvDbId tvdbId, SeasonNumber season)
-{
-    Q_UNUSED(tvdbId);
-    Q_UNUSED(season);
-}
-
-void FanartTvMusicArtists::tvShowSeasonBanners(TvDbId tvdbId, SeasonNumber season)
-{
-    Q_UNUSED(tvdbId);
-    Q_UNUSED(season);
-}
-
-void FanartTvMusicArtists::tvShowSeasonThumbs(TvDbId tvdbId, SeasonNumber season)
-{
-    Q_UNUSED(tvdbId);
-    Q_UNUSED(season);
-}
-
-void FanartTvMusicArtists::tvShowSeasonBackdrops(TvDbId tvdbId, SeasonNumber season)
+void FanartTvMusicArtists::tvShowSeason(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
+}
+
+void FanartTvMusicArtists::tvShowSeasonBanners(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
+{
+    Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
+    Q_UNUSED(season);
+}
+
+void FanartTvMusicArtists::tvShowSeasonThumbs(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
+{
+    Q_UNUSED(tvdbId);
+    Q_UNUSED(season);
+    Q_UNUSED(locale)
+}
+
+void FanartTvMusicArtists::tvShowSeasonBackdrops(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
+{
+    Q_UNUSED(tvdbId);
+    Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
 void FanartTvMusicArtists::movieImages(Movie* movie, TmdbId tmdbId, QVector<ImageType> types)
@@ -365,9 +391,9 @@ bool FanartTvMusicArtists::hasSettings() const
 
 void FanartTvMusicArtists::loadSettings(ScraperSettings& settings)
 {
-    m_language = settings.language().toString();
+    m_meta.defaultLocale = settings.language(m_meta.defaultLocale);
     m_preferredDiscType = settings.valueString("DiscType", "BluRay");
-    m_personalApiKey = settings.valueString("PersonalApiKey");
+    m_personalApiKey = settings.valueString("PersonalApiKey", "");
 }
 
 void FanartTvMusicArtists::saveSettings(ScraperSettings& settings)
@@ -399,46 +425,49 @@ void FanartTvMusicArtists::searchArtist(QString searchStr, int limit)
     Q_UNUSED(limit);
 }
 
-void FanartTvMusicArtists::artistFanarts(QString mbId)
+void FanartTvMusicArtists::artistFanarts(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void FanartTvMusicArtists::artistLogos(QString mbId)
+void FanartTvMusicArtists::artistLogos(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void FanartTvMusicArtists::artistThumbs(QString mbId)
+void FanartTvMusicArtists::artistThumbs(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void FanartTvMusicArtists::albumCdArts(QString mbId)
+void FanartTvMusicArtists::albumCdArts(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void FanartTvMusicArtists::albumThumbs(QString mbId)
+void FanartTvMusicArtists::albumThumbs(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
 
-void FanartTvMusicArtists::artistImages(Artist* artist, QString mbId, QVector<ImageType> types)
+void FanartTvMusicArtists::artistImages(Artist* artist, MusicBrainzId mbId, QVector<ImageType> types)
 {
     Q_UNUSED(artist);
     Q_UNUSED(mbId);
     Q_UNUSED(types);
 }
 
-void FanartTvMusicArtists::albumImages(Album* album, QString mbId, QVector<ImageType> types)
+void FanartTvMusicArtists::albumImages(Album* album, MusicBrainzId mbId, QVector<ImageType> types)
 {
     Q_UNUSED(album);
     Q_UNUSED(mbId);
     Q_UNUSED(types);
 }
 
-void FanartTvMusicArtists::albumBooklets(QString mbId)
+void FanartTvMusicArtists::albumBooklets(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
+
+} // namespace scraper
+} // namespace mediaelch

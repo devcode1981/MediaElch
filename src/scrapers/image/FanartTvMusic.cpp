@@ -11,50 +11,63 @@
 #include "data/Storage.h"
 #include "network/NetworkRequest.h"
 #include "scrapers/image/FanartTv.h"
-#include "scrapers/movie/TMDb.h"
+#include "scrapers/movie/tmdb/TmdbMovie.h"
 
-FanartTvMusic::FanartTvMusic(QObject* parent)
+namespace mediaelch {
+namespace scraper {
+
+QString FanartTvMusic::ID = "images.fanarttv-music_lib";
+
+FanartTvMusic::FanartTvMusic(QObject* parent) : ImageProvider(parent)
 {
-    setParent(parent);
-    m_provides = {ImageType::AlbumCdArt,
+    m_meta.identifier = ID;
+    m_meta.name = "Fanart.tv Music";
+    m_meta.description = tr("FanartTV is a community-driven image provider.");
+    m_meta.website = "https://fanart.tv";
+    m_meta.termsOfService = "https://fanart.tv/terms-and-conditions/";
+    m_meta.privacyPolicy = "https://fanart.tv/privacy-policy/";
+    m_meta.help = "https://forum.fanart.tv/";
+    m_meta.supportedImageTypes = {ImageType::AlbumCdArt,
         ImageType::AlbumThumb,
         ImageType::ArtistFanart,
         ImageType::ArtistLogo,
         ImageType::ArtistThumb,
         ImageType::ArtistExtraFanart};
+    // Multiple languages, but no way to query for it and also no official list of languages.
+    m_meta.supportedLanguages = {
+        "bg",
+        "zh",
+        "hr",
+        "cs",
+        "da",
+        "nl",
+        "en",
+        "fi",
+        "fr",
+        "de",
+        "el",
+        "he",
+        "hu",
+        "it",
+        "ja",
+        "ko",
+        "no",
+        "pl",
+        "pt",
+        "ru",
+        "sl",
+        "es",
+        "sv",
+        "tr",
+    };
+    m_meta.defaultLocale = "en";
+
     m_apiKey = "842f7a5d1cc7396f142b8dd47c4ba42b";
-    m_searchResultLimit = 0;
-    m_language = "en";
 }
 
-QString FanartTvMusic::name() const
+const ImageProvider::ScraperMeta& FanartTvMusic::meta() const
 {
-    return QString("Fanart.tv Music");
-}
-
-QUrl FanartTvMusic::siteUrl() const
-{
-    return QUrl("https://fanart.tv");
-}
-
-QString FanartTvMusic::identifier() const
-{
-    return QString("images.fanarttv-music_lib");
-}
-
-mediaelch::Locale FanartTvMusic::defaultLanguage()
-{
-    return mediaelch::Locale::English;
-}
-
-const QVector<mediaelch::Locale>& FanartTvMusic::supportedLanguages()
-{
-    return m_supportedLanguages;
-}
-
-QVector<ImageType> FanartTvMusic::provides()
-{
-    return m_provides;
+    return m_meta;
 }
 
 mediaelch::network::NetworkManager* FanartTvMusic::network()
@@ -87,9 +100,9 @@ void FanartTvMusic::searchArtist(QString searchStr, int limit)
     connect(reply, &QNetworkReply::finished, this, &FanartTvMusic::onSearchArtistFinished);
 }
 
-void FanartTvMusic::artistFanarts(QString mbId)
+void FanartTvMusic::artistFanarts(MusicBrainzId mbId)
 {
-    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/%1?%2").arg(mbId).arg(keyParameter());
+    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/%1?%2").arg(mbId.toString()).arg(keyParameter());
     QNetworkRequest request = mediaelch::network::jsonRequestWithDefaults(url);
 
     QNetworkReply* reply = network()->getWithWatcher(request);
@@ -97,9 +110,9 @@ void FanartTvMusic::artistFanarts(QString mbId)
     connect(reply, &QNetworkReply::finished, this, &FanartTvMusic::onLoadArtistFinished);
 }
 
-void FanartTvMusic::artistLogos(QString mbId)
+void FanartTvMusic::artistLogos(MusicBrainzId mbId)
 {
-    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/%1?%2").arg(mbId).arg(keyParameter());
+    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/%1?%2").arg(mbId.toString()).arg(keyParameter());
     QNetworkRequest request = mediaelch::network::jsonRequestWithDefaults(url);
 
     QNetworkReply* reply = network()->getWithWatcher(request);
@@ -107,9 +120,9 @@ void FanartTvMusic::artistLogos(QString mbId)
     connect(reply, &QNetworkReply::finished, this, &FanartTvMusic::onLoadArtistFinished);
 }
 
-void FanartTvMusic::artistThumbs(QString mbId)
+void FanartTvMusic::artistThumbs(MusicBrainzId mbId)
 {
-    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/%1?%2").arg(mbId).arg(keyParameter());
+    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/%1?%2").arg(mbId.toString()).arg(keyParameter());
     QNetworkRequest request = mediaelch::network::jsonRequestWithDefaults(url);
 
     QNetworkReply* reply = network()->getWithWatcher(request);
@@ -117,9 +130,10 @@ void FanartTvMusic::artistThumbs(QString mbId)
     connect(reply, &QNetworkReply::finished, this, &FanartTvMusic::onLoadArtistFinished);
 }
 
-void FanartTvMusic::albumCdArts(QString mbId)
+void FanartTvMusic::albumCdArts(MusicBrainzId mbId)
 {
-    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/albums/%1?%2").arg(mbId).arg(keyParameter());
+    QUrl url =
+        QStringLiteral("https://webservice.fanart.tv/v3/music/albums/%1?%2").arg(mbId.toString()).arg(keyParameter());
     QNetworkRequest request = mediaelch::network::jsonRequestWithDefaults(url);
 
     QNetworkReply* reply = network()->getWithWatcher(request);
@@ -127,9 +141,10 @@ void FanartTvMusic::albumCdArts(QString mbId)
     connect(reply, &QNetworkReply::finished, this, &FanartTvMusic::onLoadAlbumFinished);
 }
 
-void FanartTvMusic::albumThumbs(QString mbId)
+void FanartTvMusic::albumThumbs(MusicBrainzId mbId)
 {
-    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/albums/%1?%2").arg(mbId).arg(keyParameter());
+    QUrl url =
+        QStringLiteral("https://webservice.fanart.tv/v3/music/albums/%1?%2").arg(mbId.toString()).arg(keyParameter());
     QNetworkRequest request = mediaelch::network::jsonRequestWithDefaults(url);
 
     QNetworkReply* reply = network()->getWithWatcher(request);
@@ -154,7 +169,7 @@ void FanartTvMusic::onSearchArtistFinished()
     }
 
     if (reply->error() != QNetworkReply::NoError) {
-        emit sigSearchDone({}, {ScraperSearchError::ErrorType::NetworkError, reply->errorString()});
+        emit sigSearchDone({}, mediaelch::replyToScraperError(*reply));
         return;
     }
 
@@ -187,7 +202,7 @@ void FanartTvMusic::onSearchAlbumFinished()
     reply->deleteLater();
 
     if (reply->error() != QNetworkReply::NoError) {
-        emit sigSearchDone({}, {ScraperSearchError::ErrorType::NetworkError, reply->errorString()});
+        emit sigSearchDone({}, mediaelch::replyToScraperError(*reply));
         return;
     }
 
@@ -233,7 +248,7 @@ void FanartTvMusic::onLoadArtistFinished()
     reply->deleteLater();
 
     if (reply->error() != QNetworkReply::NoError) {
-        emit sigImagesLoaded({}, {ScraperLoadError::ErrorType::NetworkError, reply->errorString()});
+        emit sigImagesLoaded({}, mediaelch::replyToScraperError(*reply));
         return;
     }
 
@@ -249,7 +264,7 @@ void FanartTvMusic::onLoadAlbumFinished()
     reply->deleteLater();
 
     if (reply->error() != QNetworkReply::NoError) {
-        emit sigImagesLoaded({}, {ScraperLoadError::ErrorType::NetworkError, reply->errorString()});
+        emit sigImagesLoaded({}, mediaelch::replyToScraperError(*reply));
         return;
     }
 
@@ -258,7 +273,7 @@ void FanartTvMusic::onLoadAlbumFinished()
     emit sigImagesLoaded(posters, {});
 }
 
-QVector<Poster> FanartTvMusic::parseData(QString json, ImageType type)
+QVector<Poster> FanartTvMusic::parseData(QString json, ImageType type) const
 {
     QMap<ImageType, QStringList> map;
 
@@ -320,7 +335,7 @@ QVector<Poster> FanartTvMusic::parseData(QString json, ImageType type)
                 return QStringLiteral("");
             }();
             b.language = val.value("lang").toString();
-            FanartTv::insertPoster(posters, b, m_language, "");
+            FanartTv::insertPoster(posters, b, m_meta.defaultLocale.toString(), "");
         }
     }
 
@@ -337,83 +352,100 @@ void FanartTvMusic::concertLogos(TmdbId tmdbId)
     Q_UNUSED(tmdbId);
 }
 
-void FanartTvMusic::searchTvShow(QString searchStr, int limit)
+void FanartTvMusic::searchTvShow(QString searchStr, mediaelch::Locale locale, int limit)
 {
     Q_UNUSED(searchStr);
     Q_UNUSED(limit);
+    Q_UNUSED(locale);
 }
 
-void FanartTvMusic::tvShowImages(TvShow* show, TvDbId tvdbId, QVector<ImageType> types)
+void FanartTvMusic::tvShowImages(TvShow* show, TvDbId tvdbId, QVector<ImageType> types, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(show);
     Q_UNUSED(types);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowPosters(TvDbId tvdbId)
+void FanartTvMusic::tvShowPosters(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowBackdrops(TvDbId tvdbId)
+void FanartTvMusic::tvShowBackdrops(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowLogos(TvDbId tvdbId)
+void FanartTvMusic::tvShowLogos(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowThumbs(TvDbId tvdbId)
+void FanartTvMusic::tvShowThumbs(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowClearArts(TvDbId tvdbId)
+void FanartTvMusic::tvShowClearArts(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowCharacterArts(TvDbId tvdbId)
+void FanartTvMusic::tvShowCharacterArts(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowBanners(TvDbId tvdbId)
+void FanartTvMusic::tvShowBanners(TvDbId tvdbId, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowEpisodeThumb(TvDbId tvdbId, SeasonNumber season, EpisodeNumber episode)
+void FanartTvMusic::tvShowEpisodeThumb(TvDbId tvdbId,
+    SeasonNumber season,
+    EpisodeNumber episode,
+    const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
     Q_UNUSED(episode);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowSeason(TvDbId tvdbId, SeasonNumber season)
+void FanartTvMusic::tvShowSeason(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowSeasonBanners(TvDbId tvdbId, SeasonNumber season)
+void FanartTvMusic::tvShowSeasonBanners(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowSeasonThumbs(TvDbId tvdbId, SeasonNumber season)
+void FanartTvMusic::tvShowSeasonThumbs(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
-void FanartTvMusic::tvShowSeasonBackdrops(TvDbId tvdbId, SeasonNumber season)
+void FanartTvMusic::tvShowSeasonBackdrops(TvDbId tvdbId, SeasonNumber season, const mediaelch::Locale& locale)
 {
     Q_UNUSED(tvdbId);
     Q_UNUSED(season);
+    Q_UNUSED(locale)
 }
 
 void FanartTvMusic::movieImages(Movie* movie, TmdbId tmdbId, QVector<ImageType> types)
@@ -493,8 +525,8 @@ bool FanartTvMusic::hasSettings() const
 
 void FanartTvMusic::loadSettings(ScraperSettings& settings)
 {
-    m_language = settings.language().toString();
-    m_personalApiKey = settings.valueString("PersonalApiKey");
+    m_meta.defaultLocale = settings.language(m_meta.defaultLocale);
+    m_personalApiKey = settings.valueString("PersonalApiKey", "");
 }
 
 void FanartTvMusic::saveSettings(ScraperSettings& settings)
@@ -519,9 +551,9 @@ void FanartTvMusic::searchConcert(QString searchStr, int limit)
     Q_UNUSED(limit);
 }
 
-void FanartTvMusic::artistImages(Artist* artist, QString mbId, QVector<ImageType> types)
+void FanartTvMusic::artistImages(Artist* artist, MusicBrainzId mbId, QVector<ImageType> types)
 {
-    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/%1?%2").arg(mbId).arg(keyParameter());
+    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/%1?%2").arg(mbId.toString()).arg(keyParameter());
     QNetworkRequest request = mediaelch::network::jsonRequestWithDefaults(url);
 
     QNetworkReply* reply = network()->getWithWatcher(request);
@@ -530,9 +562,10 @@ void FanartTvMusic::artistImages(Artist* artist, QString mbId, QVector<ImageType
     connect(reply, &QNetworkReply::finished, this, &FanartTvMusic::onLoadAllArtistDataFinished);
 }
 
-void FanartTvMusic::albumImages(Album* album, QString mbId, QVector<ImageType> types)
+void FanartTvMusic::albumImages(Album* album, MusicBrainzId mbId, QVector<ImageType> types)
 {
-    QUrl url = QStringLiteral("https://webservice.fanart.tv/v3/music/albums/%1?%2").arg(mbId).arg(keyParameter());
+    QUrl url =
+        QStringLiteral("https://webservice.fanart.tv/v3/music/albums/%1?%2").arg(mbId.toString()).arg(keyParameter());
     QNetworkRequest request = mediaelch::network::jsonRequestWithDefaults(url);
 
     QNetworkReply* reply = network()->getWithWatcher(request);
@@ -571,7 +604,10 @@ void FanartTvMusic::onLoadAllArtistDataFinished()
     emit sigArtistImagesLoaded(artist, posters);
 }
 
-void FanartTvMusic::albumBooklets(QString mbId)
+void FanartTvMusic::albumBooklets(MusicBrainzId mbId)
 {
     Q_UNUSED(mbId);
 }
+
+} // namespace scraper
+} // namespace mediaelch
